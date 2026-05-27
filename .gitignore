@@ -23,3 +23,7 @@ Thumbs.db
 # Local Gemini app data / caching
 .gemini/
 brain/
+
+# Other project folders
+telegram-movie-app/
+
