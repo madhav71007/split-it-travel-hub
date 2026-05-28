@@ -6,7 +6,7 @@ import { SkyThemeProvider, useSkyTheme } from '@/components/SkyThemeProvider';
 
 function RootLayoutNav() {
   const { phase } = useSkyTheme();
-  const isDark = phase === 'evening' || phase === 'night';
+  const isDark = phase === 'evening';
 
   return (
     <>

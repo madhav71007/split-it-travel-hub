@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { type ThemePhase } from '@/constants/theme';
 
 function detectPhase(hour: number): ThemePhase {
-  if (hour >= 6 && hour < 11) return 'morning';
-  if (hour >= 11 && hour < 16) return 'afternoon';
-  if (hour >= 16 && hour < 19) return 'evening';
-  return 'night';
+  // Day mode (6 AM to 6 PM)
+  if (hour >= 6 && hour < 18) return 'morning';
+  // Night mode (6 PM to 6 AM)
+  return 'evening';
 }
 
 export interface UseTimeThemeResult {

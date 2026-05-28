@@ -27,17 +27,13 @@ interface Trip {
 }
 
 const PHASE_LABELS: Record<string, string> = {
-  morning: '🌅 Good Morning',
-  afternoon: '☀️ Good Afternoon',
+  morning: '🌅 Good Day',
   evening: '🌇 Good Evening',
-  night: '🌙 Good Night',
 };
 
 const PHASE_BADGES: Record<string, string> = {
-  morning: '🌤 Dawn Horizon',
-  afternoon: '🌿 Bright Canopy',
-  evening: '🌅 Twilight Sky',
-  night: '🌕 Pale Moon',
+  morning: '🌤 Light Mode',
+  evening: '🌇 Dark Mode',
 };
 
 export default function DashboardScreen() {
@@ -99,8 +95,8 @@ export default function DashboardScreen() {
     );
   };
 
-  const phaseOptions: Array<'morning' | 'afternoon' | 'evening' | 'night'> = [
-    'morning', 'afternoon', 'evening', 'night',
+  const phaseOptions: Array<'morning' | 'evening'> = [
+    'morning', 'evening',
   ];
 
   return (
@@ -147,7 +143,7 @@ export default function DashboardScreen() {
               }}
             >
               <Text style={{ color: t.text, fontSize: 12, fontWeight: '600' }}>
-                {p.charAt(0).toUpperCase() + p.slice(1)}
+                {p === 'morning' ? 'Light Mode' : 'Dark Mode'}
               </Text>
             </TouchableOpacity>
           ))}

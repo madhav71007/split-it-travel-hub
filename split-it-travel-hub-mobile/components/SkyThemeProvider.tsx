@@ -26,7 +26,7 @@ export function useSkyTheme() {
 }
 
 // ── Phase → numeric index for reanimated interpolation ───────────────────────
-const PHASE_ORDER: ThemePhase[] = ['morning', 'afternoon', 'evening', 'night'];
+const PHASE_ORDER: ThemePhase[] = ['morning', 'evening'];
 const phaseIndex = (p: ThemePhase) => PHASE_ORDER.indexOf(p);
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -43,10 +43,9 @@ export function SkyThemeProvider({ children }: { children: ReactNode }) {
   }, [phase]);
 
   const phaseColors = PHASE_ORDER.map((p) => THEME[p].gradientFrom);
-  const phaseBg = PHASE_ORDER.map((p) => THEME[p].gradientTo);
 
   const bgStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1, 2, 3], phaseColors),
+    backgroundColor: interpolateColor(progress.value, [0, 1], phaseColors),
   }));
 
   return (
