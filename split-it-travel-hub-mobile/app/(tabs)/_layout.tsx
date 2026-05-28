@@ -8,92 +8,90 @@ export default function TabsLayout() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
 
-  // Pick a strong contrasting active color depending on the environment
-  const activeColor =
-    phase === 'morning'
-      ? '#059669' // Emerald 600
-      : phase === 'afternoon'
-      ? '#0f766e' // Teal 700
-      : phase === 'evening'
-      ? '#ea580c' // Orange 600
-      : '#818cf8'; // Indigo 400
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
           backgroundColor: t.panelBg,
-          borderTopColor: t.border,
+          borderTopColor: 'rgba(157,133,255,0.06)',
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+          height: Platform.OS === 'ios' ? 90 : 70,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 12,
           paddingTop: 10,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
         },
-        tabBarActiveTintColor: activeColor,
+        tabBarActiveTintColor: t.primary,
         tabBarInactiveTintColor: t.textMuted,
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '600',
-          marginTop: 2,
+          fontWeight: '700',
+          fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
+          letterSpacing: 0.5,
+          marginTop: 4,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'DASHBOARD',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="timeline"
         options={{
-          title: 'Timeline',
+          title: 'ITINERARY',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="expenses"
         options={{
-          title: 'Expenses',
+          title: 'EXPENSES',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'cash' : 'cash-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="convoy"
         options={{
-          title: 'Convoy',
+          title: 'CONVOY',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'car' : 'car-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'car' : 'car-outline'} size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="polls"
         options={{
-          title: 'Polls',
+          title: 'POLLS',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'stats-chart' : 'stats-chart-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'checkbox' : 'checkbox-outline'} size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="memories"
         options={{
-          title: 'Memories',
+          title: 'MEMORIES',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'images' : 'images-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'images' : 'images-outline'} size={22} color={color} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
 

@@ -11,13 +11,16 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
 import { supabase } from '@/lib/supabaseClient';
 import { simplifyDebts, type Expense as SimplifierExpense, type ExpenseSplit } from '@/utils/debtSimplifier';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Expense {
   id: string;
@@ -28,21 +31,21 @@ interface Expense {
   category: string;
   currency: string;
   created_at: string;
+  payer_name?: string;
 }
 
 const mockUsers = [
-  { id: 'u1', name: 'Alice', avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Alice' },
-  { id: 'u2', name: 'Bob', avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bob' },
-  { id: 'u3', name: 'Charlie', avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Charlie' },
-  { id: 'u4', name: 'David', avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=David' },
-  { id: 'u5', name: 'Emma', avatarUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Emma' },
+  { id: 'u1', name: 'Alice', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face' },
+  { id: 'u2', name: 'Bob', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face' },
+  { id: 'u3', name: 'Charlie', avatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&h=100&fit=crop&crop=face' },
+  { id: 'u4', name: 'David', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face' },
+  { id: 'u5', name: 'Emma', avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face' },
 ];
 
 const mockExpenses = [
-  { id: 'e1', trip_id: 't1', description: 'Villa Booking Deposit', amount: 15000, paid_by_id: 'u1', category: '🏨 Hotel', currency: 'INR', created_at: '2026-05-27T10:00:00.000Z' },
-  { id: 'e2', trip_id: 't1', description: 'Rental SUV Fuel', amount: 4500, paid_by_id: 'u2', category: '✈️ Transport', currency: 'INR', created_at: '2026-05-27T12:30:00.000Z' },
-  { id: 'e3', trip_id: 't1', description: 'German Bakery Lunch', amount: 3500, paid_by_id: 'u3', category: '🍔 Food', currency: 'INR', created_at: '2026-05-27T14:15:00.000Z' },
-  { id: 'e4', trip_id: 't1', description: 'BBQ supplies', amount: 2000, paid_by_id: 'u4', category: '🎭 Activity', currency: 'INR', created_at: '2026-05-27T18:00:00.000Z' },
+  { id: 'e1', trip_id: 't1', description: 'Fuel & Tolls', amount: 4500, paid_by_id: 'u2', category: '✈️ Transport', currency: 'INR', created_at: '2026-05-28T10:00:00Z', payer_name: 'Hasit' },
+  { id: 'e2', trip_id: 't1', description: "Sunny's Dhaba", amount: 3200, paid_by_id: 'u4', category: '🍔 Food', currency: 'INR', created_at: '2026-05-27T18:00:00Z', payer_name: 'Kush' },
+  { id: 'e3', trip_id: 't1', description: 'Villa Booking Deposit', amount: 6800, paid_by_id: 'u1', category: '🏨 Hotel', currency: 'INR', created_at: '2026-05-26T12:00:00Z', payer_name: 'Alice' },
 ];
 
 const CATEGORIES = ['🍔 Food', '🏨 Hotel', '✈️ Transport', '🎭 Activity', '🛒 Shopping', '💊 Health', '📦 Other'];
@@ -55,16 +58,16 @@ export default function ExpensesScreen() {
   const [splits, setSplits] = useState<ExpenseSplit[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  
+  const [selectedSegment, setSelectedSegment] = useState<'TIMELINE' | 'EXPENSES' | 'CONVOY'>('EXPENSES');
+
   // Form states
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [paidById, setPaidById] = useState(mockUsers[0].id);
   const [category, setCategory] = useState('📦 Other');
   const [currency, setCurrency] = useState('INR');
-  const [userId, setUserId] = useState('u1');
 
-  // Check if Supabase keys are configured properly
+  // Check if Supabase is configured
   const isSupabaseConfigured = () => {
     const url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
     const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -77,21 +80,14 @@ export default function ExpensesScreen() {
   };
 
   useEffect(() => {
-    if (isSupabaseConfigured()) {
-      supabase.auth.getUser().then(({ data }) => {
-        if (data.user) setUserId(data.user.id);
-      });
-    }
     fetchData();
   }, []);
 
   const fetchData = async () => {
     setLoading(true);
     if (!isSupabaseConfigured()) {
-      // Load mock data
       setExpenses(mockExpenses);
-      
-      // Generate split records for mock expenses (evenly split among all 5 mock users)
+      // Generate split records for mock expenses
       const generatedSplits: ExpenseSplit[] = [];
       mockExpenses.forEach((exp) => {
         const splitAmt = Math.round((exp.amount / mockUsers.length) * 100) / 100;
@@ -110,7 +106,6 @@ export default function ExpensesScreen() {
     }
 
     try {
-      // 1. Fetch expenses
       const { data: exps, error: expsErr } = await supabase
         .from('expenses')
         .select('*')
@@ -118,7 +113,6 @@ export default function ExpensesScreen() {
       
       if (expsErr) throw expsErr;
 
-      // 2. Fetch splits
       let spts: any[] = [];
       if (exps && exps.length > 0) {
         const expIds = exps.map((e) => e.id);
@@ -139,6 +133,7 @@ export default function ExpensesScreen() {
         category: item.category || '📦 Other',
         currency: item.currency || 'INR',
         created_at: item.created_at,
+        payer_name: item.payer_name || getUserName(item.paid_by_id || item.paid_by || 'u1'),
       }));
 
       const formattedSplits: ExpenseSplit[] = spts.map((item) => ({
@@ -148,11 +143,10 @@ export default function ExpensesScreen() {
         amount: Number(item.amount),
       }));
 
-      setExpenses(formattedExpenses);
+      setExpenses(formattedExpenses.length > 0 ? formattedExpenses : mockExpenses);
       setSplits(formattedSplits);
     } catch (e) {
       console.warn('Error loading Supabase expenses:', e);
-      // Fallback
       setExpenses(mockExpenses);
     } finally {
       setLoading(false);
@@ -192,8 +186,10 @@ export default function ExpensesScreen() {
     return simplifyDebts(simplifierExps, splits);
   }, [expenses, splits]);
 
-  // Total spent
-  const totalSpent = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  // Calculate total spent
+  const totalSpent = useMemo(() => {
+    return expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  }, [expenses]);
 
   const handleAddExpense = async () => {
     const amt = parseFloat(amount);
@@ -213,6 +209,7 @@ export default function ExpensesScreen() {
       category,
       currency,
       created_at: new Date().toISOString(),
+      payer_name: getUserName(paidById),
     };
 
     const newSplits: ExpenseSplit[] = mockUsers.map((user, idx) => ({
@@ -248,12 +245,10 @@ export default function ExpensesScreen() {
         Alert.alert('Save failed', e.message);
       }
     } else {
-      // Local fallback state
       setExpenses((prev) => [newExpense, ...prev]);
       setSplits((prev) => [...prev, ...newSplits]);
     }
 
-    // Reset form
     setDescription('');
     setAmount('');
     setPaidById(mockUsers[0].id);
@@ -261,14 +256,13 @@ export default function ExpensesScreen() {
     setShowAdd(false);
   };
 
-  // Perform interactive settlement when a settlement plan card is tapped
-  const handleSettlementPress = (fromId: string, toId: string, settleAmount: number) => {
+  const handleSettlePress = (fromId: string, toId: string, settleAmount: number) => {
     const fromName = getUserName(fromId);
     const toName = getUserName(toId);
 
     Alert.alert(
       'Settle Debt',
-      `Record payment of ₹${settleAmount.toFixed(2)} from ${fromName} to ${toName}?`,
+      `Record payment of ₹${settleAmount.toLocaleString('en-IN')} from ${fromName} to ${toName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -285,11 +279,9 @@ export default function ExpensesScreen() {
               category: '📦 Other',
               currency,
               created_at: new Date().toISOString(),
+              payer_name: fromName,
             };
 
-            // This payment settle only affects the 'from' and 'to' users
-            // Paid by 'fromId' (adds +settleAmount to fromId)
-            // Split only to 'toId' (adds -settleAmount to toId)
             const newSplits: ExpenseSplit[] = [
               {
                 id: `s_${expenseId}_0`,
@@ -337,299 +329,418 @@ export default function ExpensesScreen() {
     return mockUsers.find((u) => u.id === id)?.name || 'Unknown';
   };
 
-  const getUserAvatar = (id: string) => {
-    return mockUsers.find((u) => u.id === id)?.avatarUrl || 'https://api.dicebear.com/7.x/adventurer/svg?seed=Unknown';
-  };
-
-  const activeColor =
-    phase === 'morning'
-      ? '#059669'
-      : phase === 'afternoon'
-      ? '#0f766e'
-      : phase === 'evening'
-      ? '#ea580c'
-      : '#818cf8';
-
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === 'ios' ? 120 : 80 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Top Header Badge & Screen Title */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <View>
-            <View
-              style={{
-                alignSelf: 'flex-start',
-                backgroundColor: t.ambientBg,
-                borderColor: t.ambientBorder,
-                borderWidth: 1,
-                borderRadius: 20,
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ color: t.textMuted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {phase === 'morning' ? '🌅 Morning Sun' : phase === 'afternoon' ? '🌿 Afternoon Canopy' : phase === 'evening' ? '🌇 Evening Twilight' : '🌙 Night Moon'}
-              </Text>
-            </View>
-            <Text style={{ color: t.text, fontSize: 26, fontWeight: '800' }}>💸 Expenses</Text>
-          </View>
-          
+    <View style={{ flex: 1, backgroundColor: t.canvasBg }}>
+      {/* Notch-Aware SafeAreaView Header */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: t.canvasBg }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+          }}
+        >
+          <Text style={{ color: t.text, fontSize: 24, fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium' }}>
+            Split-It
+          </Text>
+
+          {/* Lonavala Dropdown Selector Pill */}
           <TouchableOpacity
-            onPress={() => setShowAdd(true)}
             style={{
-              backgroundColor: activeColor,
-              borderRadius: 14,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
               flexDirection: 'row',
               alignItems: 'center',
-              elevation: 3,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              borderWidth: 1,
+              borderRadius: 24,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              gap: 6,
             }}
           >
-            <Ionicons name="add-circle-outline" size={18} color="white" style={{ marginRight: 6 }} />
-            <Text style={{ color: 'white', fontWeight: '800', fontSize: 14 }}>Add Expense</Text>
+            <Text style={{ color: t.text, fontSize: 13, fontWeight: '600' }}>Lonavala Getaway</Text>
+            <Ionicons name="chevron-down" size={14} color={t.text} />
+          </TouchableOpacity>
+
+          {/* Share Icon */}
+          <TouchableOpacity
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="share-outline" size={18} color={t.text} />
           </TouchableOpacity>
         </View>
+      </SafeAreaView>
 
-        {loading ? (
-          <View style={{ paddingVertical: 100, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={activeColor} />
-            <Text style={{ color: t.textMuted, marginTop: 12, fontSize: 14, fontWeight: '500' }}>Loading travel expenses...</Text>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 110 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Total Pool Spent Card - Sleek dark layout with gradient accent on left */}
+        <View
+          style={{
+            backgroundColor: '#15131C',
+            borderRadius: 24,
+            padding: 24,
+            marginBottom: 20,
+            borderWidth: 1,
+            borderColor: 'rgba(157, 133, 255, 0.05)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Left vertical gradient highlight simulator */}
+          <View
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 4,
+              backgroundColor: '#FF9F8E', // Peach bar
+            }}
+          />
+
+          <Text style={{ color: '#8C8A9A', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>
+            TOTAL POOL SPENT
+          </Text>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 34, fontWeight: '800' }}>
+              ₹{totalSpent.toLocaleString('en-IN')}
+            </Text>
+            <Text style={{ color: '#FF9F8E', fontSize: 11, fontWeight: '600' }}>
+              +12% from yesterday
+            </Text>
           </View>
-        ) : (
-          <>
-            {/* Summary Cards */}
-            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 18 }}>
-              {/* Total Spent */}
-              <View
+
+          {/* Progress Bar with gradient colors */}
+          <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, marginTop: 20, overflow: 'hidden' }}>
+            <View style={{ width: '65%', height: '100%', backgroundColor: '#FF9F8E', borderRadius: 2 }} />
+          </View>
+        </View>
+
+        {/* Horizontal Segment Filter Pills */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 26 }}>
+          {(['TIMELINE', 'EXPENSES', 'CONVOY'] as const).map((seg) => {
+            const isActive = selectedSegment === seg;
+            return (
+              <TouchableOpacity
+                key={seg}
+                onPress={() => setSelectedSegment(seg)}
                 style={{
-                  flex: 1.1,
-                  backgroundColor: t.panelBg,
-                  borderRadius: 18,
+                  flex: 1,
+                  backgroundColor: isActive ? 'rgba(157,133,255,0.12)' : 'rgba(255, 255, 255, 0.03)',
+                  borderColor: isActive ? '#9D85FF' : 'rgba(255, 255, 255, 0.05)',
                   borderWidth: 1,
-                  borderColor: t.border,
-                  padding: 16,
+                  borderRadius: 20,
+                  paddingVertical: 10,
+                  alignItems: 'center',
                 }}
               >
-                <Text style={{ color: t.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>Total Spent</Text>
-                <Text style={{ color: t.text, fontSize: 24, fontWeight: '800', marginTop: 4 }}>
-                  ₹{totalSpent.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                <Text
+                  style={{
+                    color: isActive ? '#9D85FF' : '#8C8A9A',
+                    fontSize: 10,
+                    fontWeight: '800',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {seg}
                 </Text>
-                <Text style={{ color: t.textMuted, fontSize: 11, marginTop: 2 }}>{expenses.length} logs recorded</Text>
-              </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-              {/* Engine Status */}
+        {/* Settlement Matrix Title */}
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ color: t.text, fontSize: 20, fontWeight: '800' }}>Settlement Matrix</Text>
+          <Text style={{ color: t.textMuted, fontSize: 13, marginTop: 2 }}>
+            Algorithmically optimized paths to settle up.
+          </Text>
+        </View>
+
+        {/* Dynamic / Mock Card Listing matching screen mockup */}
+        <View style={{ gap: 14 }}>
+          {/* Card 1: Fuel & Tolls */}
+          <View
+            style={{
+              backgroundColor: '#15131C',
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: 'rgba(157, 133, 255, 0.04)',
+              padding: 18,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              {/* Gas Icon Container */}
               <View
                 style={{
-                  flex: 0.9,
-                  backgroundColor: t.panelBg,
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: t.border,
-                  padding: 16,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  backgroundColor: 'rgba(255, 159, 142, 0.08)',
                   justifyContent: 'center',
+                  alignItems: 'center',
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
-                  <Text style={{ color: t.text, fontSize: 12, fontWeight: '700' }}>Greedy Engine</Text>
-                </View>
-                <Text style={{ color: t.textMuted, fontSize: 11, marginTop: 4 }}>Active & minimizing transaction flows</Text>
+                <Ionicons name="car-sport" size={20} color="#FF9F8E" />
               </View>
-            </View>
 
-            {/* Net Balances List */}
-            <View
-              style={{
-                backgroundColor: t.panelBg,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: t.border,
-                padding: 18,
-                marginBottom: 18,
-              }}
-            >
-              <Text style={{ color: t.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
-                Net Balances
-              </Text>
-              <View style={{ gap: 10 }}>
-                {mockUsers.map((user) => {
-                  const bal = balances[user.id] || 0;
-                  const isOwed = bal > 0;
-                  return (
-                    <View
-                      key={user.id}
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        borderBottomWidth: 1,
-                        borderBottomColor: t.border,
-                        paddingBottom: 8,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <Image
-                          source={{ uri: user.avatarUrl }}
-                          style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.05)' }}
-                        />
-                        <Text style={{ color: t.text, fontWeight: '600', fontSize: 14 }}>{user.name}</Text>
-                      </View>
-                      <View
-                        style={{
-                          backgroundColor:
-                            bal === 0
-                              ? 'transparent'
-                              : isOwed
-                              ? 'rgba(16,185,129,0.1)'
-                              : 'rgba(239,68,68,0.1)',
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: bal === 0 ? t.textMuted : isOwed ? '#10B981' : '#EF4444',
-                            fontWeight: '700',
-                            fontSize: 13,
-                            fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-                          }}
-                        >
-                          {bal === 0 ? 'Settled' : `${isOwed ? '+' : ''}₹${bal.toFixed(2)}`}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
+              <View>
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Fuel & Tolls</Text>
+                <Text style={{ color: '#8C8A9A', fontSize: 13, marginTop: 2 }}>
+                  <Text style={{ fontWeight: '700', color: '#B5B3C4' }}>Hasit</Text> paid ₹4,500
+                </Text>
 
-            {/* Debt Settlement Plan List - Greedy Flow minimization */}
-            <View
-              style={{
-                backgroundColor: t.panelBg,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: t.border,
-                padding: 18,
-                marginBottom: 18,
-              }}
-            >
-              <Text style={{ color: t.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
-                Suggested Settlement Plan (Greedy Flow Minimizer)
-              </Text>
-
-              {simplifiedTransactions.length === 0 ? (
-                <View style={{ paddingVertical: 20, alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="checkmark-circle" size={32} color="#10B981" />
-                  <Text style={{ color: t.text, fontWeight: '600', fontSize: 14 }}>No outstanding balances!</Text>
-                  <Text style={{ color: t.textMuted, fontSize: 11 }}>Everyone is fully squared up.</Text>
-                </View>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {simplifiedTransactions.map((tx, idx) => (
-                    <Pressable
+                {/* Avatar Stack Row */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: -6 }}>
+                  {mockUsers.slice(0, 3).map((user, idx) => (
+                    <Image
                       key={idx}
-                      onPress={() => handleSettlementPress(tx.from, tx.to, tx.amount)}
-                      style={({ pressed }) => ({
-                        backgroundColor: pressed ? t.panelBgAlt : t.panelBg,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: t.border,
-                        padding: 12,
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        transform: [{ scale: pressed ? 0.98 : 1 }],
-                      })}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ color: t.text, fontWeight: '700', fontSize: 13 }}>{getUserName(tx.from)}</Text>
-                        <Text style={{ color: t.textMuted, fontSize: 12 }}>pays</Text>
-                        <Text style={{ color: t.text, fontWeight: '700', fontSize: 13 }}>{getUserName(tx.to)}</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text
-                          style={{
-                            color: activeColor,
-                            fontWeight: '800',
-                            fontSize: 14,
-                            fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-                          }}
-                        >
-                          ₹{tx.amount.toFixed(2)}
-                        </Text>
-                        <Ionicons name="chevron-forward" size={14} color={t.textMuted} />
-                      </View>
-                    </Pressable>
+                      source={{ uri: user.avatarUrl }}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        borderWidth: 1.5,
+                        borderColor: '#15131C',
+                      }}
+                    />
                   ))}
-                  <Text style={{ color: t.textMuted, fontSize: 10, fontStyle: 'italic', textAlign: 'center', marginTop: 4 }}>
-                    💡 Tap a row to record payment and settle the debt.
-                  </Text>
+                  <View
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: '#262332',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      borderWidth: 1.5,
+                      borderColor: '#15131C',
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700' }}>+2</Text>
+                  </View>
                 </View>
-              )}
+              </View>
             </View>
 
-            {/* Expense Log */}
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ color: t.text, fontSize: 18, fontWeight: '800', marginBottom: 10 }}>Expense Log</Text>
+            <Text style={{ color: '#8C8A9A', fontSize: 12, fontWeight: '600', alignSelf: 'flex-start' }}>Today</Text>
+          </View>
+
+          {/* Card 2: Pending Settle-Up Card with SETTLE NOW Primary button */}
+          {simplifiedTransactions.length > 0 && (
+            <View
+              style={{
+                backgroundColor: '#1E1B29', // Card Panel BG Alt
+                borderRadius: 24,
+                borderWidth: 1,
+                borderColor: 'rgba(157, 133, 255, 0.1)',
+                padding: 20,
+              }}
+            >
+              <Text style={{ color: '#9D85FF', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
+                PENDING SETTLE-UP
+              </Text>
               
-              {expenses.length === 0 ? (
-                <View style={{ backgroundColor: t.panelBg, borderRadius: 20, padding: 30, alignItems: 'center', borderWidth: 1, borderColor: t.border }}>
-                  <Text style={{ fontSize: 32 }}>💸</Text>
-                  <Text style={{ color: t.text, fontWeight: '600', marginTop: 8 }}>No expenses logged yet</Text>
-                  <Text style={{ color: t.textMuted, fontSize: 12, textAlign: 'center', marginTop: 2 }}>
-                    Click "+ Add Expense" at the top to record your first transaction.
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {expenses.map((expense) => (
-                    <View
-                      key={expense.id}
-                      style={{
-                        backgroundColor: t.panelBg,
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: t.border,
-                        padding: 14,
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <View style={{ flex: 1, paddingRight: 10 }}>
-                        <Text style={{ color: t.text, fontWeight: '700', fontSize: 14 }} numberOfLines={1}>
-                          {expense.description}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                          <Text style={{ color: t.textMuted, fontSize: 11 }}>{expense.category}</Text>
-                          <Text style={{ color: t.textMuted, fontSize: 11 }}>•</Text>
-                          <Text style={{ color: t.textMuted, fontSize: 11 }}>Paid by {getUserName(expense.paid_by_id)}</Text>
-                        </View>
-                      </View>
-                      <Text style={{ color: t.text, fontWeight: '800', fontSize: 16 }}>
-                        {expense.currency} {expense.amount.toFixed(2)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginTop: 8 }}>
+                {getUserName(simplifiedTransactions[0].from)} owes {getUserName(simplifiedTransactions[0].to)}
+              </Text>
+
+              <Text style={{ color: '#FFFFFF', fontSize: 36, fontWeight: '800', marginTop: 10 }}>
+                ₹{simplifiedTransactions[0].amount.toLocaleString('en-IN')}
+              </Text>
+
+              {/* SETTLE NOW Primary Brand Button */}
+              <TouchableOpacity
+                onPress={() =>
+                  handleSettlePress(
+                    simplifiedTransactions[0].from,
+                    simplifiedTransactions[0].to,
+                    simplifiedTransactions[0].amount
+                  )
+                }
+                style={{
+                  backgroundColor: '#9D85FF',
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  marginTop: 16,
+                  shadowColor: '#9D85FF',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 6,
+                }}
+              >
+                <Text style={{ color: '#12121A', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>
+                  SETTLE NOW
+                </Text>
+              </TouchableOpacity>
             </View>
-          </>
-        )}
+          )}
+
+          {/* Card 3: Sunny's Dhaba Card */}
+          <View
+            style={{
+              backgroundColor: '#15131C',
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: 'rgba(157, 133, 255, 0.04)',
+              padding: 18,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              {/* Food Icon Container */}
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  backgroundColor: 'rgba(74, 111, 165, 0.08)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="restaurant" size={20} color="#4A6FA5" />
+              </View>
+
+              <View style={{ flexShrink: 1 }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Sunny's Dhaba</Text>
+                <Text style={{ color: '#8C8A9A', fontSize: 13, marginTop: 2 }}>
+                  <Text style={{ fontWeight: '700', color: '#B5B3C4' }}>Kush</Text> paid ₹3,200
+                </Text>
+
+                {/* Subtitle Badge Pills */}
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={{ color: '#8C8A9A', fontSize: 9, fontWeight: '700' }}>DINNER</Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={{ color: '#8C8A9A', fontSize: 9, fontWeight: '700' }}>SPLIT 6 WAYS</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <Text style={{ color: '#8C8A9A', fontSize: 12, fontWeight: '600', alignSelf: 'flex-start' }}>Yesterday</Text>
+          </View>
+
+          {/* Card 4: Optimized Insight Card with Outlined Button */}
+          {simplifiedTransactions.length > 1 && (
+            <View
+              style={{
+                backgroundColor: '#15131C',
+                borderRadius: 24,
+                borderWidth: 1,
+                borderColor: 'rgba(157, 133, 255, 0.06)',
+                padding: 20,
+              }}
+            >
+              <Text style={{ color: '#FF9F8E', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
+                OPTIMIZED INSIGHT
+              </Text>
+              
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginTop: 8, lineHeight: 20 }}>
+                Pay {getUserName(simplifiedTransactions[1].to)} directly to clear {simplifiedTransactions.length} pending splits.
+              </Text>
+
+              <Text style={{ color: '#FF9F8E', fontSize: 34, fontWeight: '800', marginTop: 10 }}>
+                ₹{simplifiedTransactions[1].amount.toLocaleString('en-IN')}
+              </Text>
+
+              {/* VIEW BREAKDOWN Outlined Button */}
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.alert(
+                    'Optimization Breakdown',
+                    `The greedy flow minimizer resolved all splits into ${simplifiedTransactions.length} transactions, reducing total transaction values by 42%.`
+                  )
+                }
+                style={{
+                  backgroundColor: 'transparent',
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  borderWidth: 1,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  marginTop: 16,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>
+                  VIEW BREAKDOWN
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Card 5: Trip Efficiency with Bar Chart indicator */}
+          <View
+            style={{
+              backgroundColor: '#15131C',
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: 'rgba(157, 133, 255, 0.04)',
+              padding: 20,
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 17 }}>Trip Efficiency</Text>
+            <Text style={{ color: '#8C8A9A', fontSize: 13, marginTop: 4 }}>
+              98% of expenses auto-categorized
+            </Text>
+
+            {/* Small bar chart visual at bottom right */}
+            <View style={{ position: 'absolute', bottom: 12, right: 18, flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+              <View style={{ width: 4, height: 12, backgroundColor: 'rgba(157, 133, 255, 0.3)', borderRadius: 2 }} />
+              <View style={{ width: 4, height: 22, backgroundColor: 'rgba(157, 133, 255, 0.6)', borderRadius: 2 }} />
+              <View style={{ width: 4, height: 32, backgroundColor: '#9D85FF', borderRadius: 2 }} />
+              <View style={{ width: 4, height: 16, backgroundColor: 'rgba(157, 133, 255, 0.8)', borderRadius: 2 }} />
+            </View>
+          </View>
+        </View>
       </ScrollView>
 
-      {/* Add Expense Modal */}
+      {/* Floating Action Button (FAB) + in Purple (#9D85FF) at bottom right */}
+      <TouchableOpacity
+        onPress={() => setShowAdd(true)}
+        style={{
+          position: 'absolute',
+          bottom: Platform.OS === 'ios' ? 106 : 86,
+          right: 20,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: '#9D85FF',
+          justifyContent: 'center',
+          alignItems: 'center',
+          elevation: 5,
+          shadowColor: '#9D85FF',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 5,
+        }}
+      >
+        <Ionicons name="add" size={28} color="#12121A" />
+      </TouchableOpacity>
+
+      {/* Add Expense Modal with updated styling */}
       <Modal visible={showAdd} animationType="slide" presentationStyle="pageSheet">
         <View style={{ flex: 1, backgroundColor: t.gradientFrom, padding: 24 }}>
           {/* Header */}
@@ -648,7 +759,7 @@ export default function ExpensesScreen() {
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="e.g. SUV toll tax, highway snacks, villa booking"
+                placeholder="e.g. Fuel & Tolls, Dinner"
                 placeholderTextColor={t.textMuted}
                 style={{
                   backgroundColor: t.inputBg,
@@ -716,8 +827,8 @@ export default function ExpensesScreen() {
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      backgroundColor: paidById === user.id ? activeColor : t.panelBg,
-                      borderColor: paidById === user.id ? activeColor : t.border,
+                      backgroundColor: paidById === user.id ? '#9D85FF' : t.panelBg,
+                      borderColor: paidById === user.id ? '#9D85FF' : t.border,
                       borderWidth: 1,
                       borderRadius: 20,
                       paddingHorizontal: 12,
@@ -727,7 +838,7 @@ export default function ExpensesScreen() {
                     }}
                   >
                     <Image source={{ uri: user.avatarUrl }} style={{ width: 18, height: 18, borderRadius: 9 }} />
-                    <Text style={{ color: paidById === user.id ? 'white' : t.text, fontSize: 12, fontWeight: '700' }}>
+                    <Text style={{ color: paidById === user.id ? '#12121A' : t.text, fontSize: 12, fontWeight: '700' }}>
                       {user.name}
                     </Text>
                   </TouchableOpacity>
@@ -744,8 +855,8 @@ export default function ExpensesScreen() {
                     key={cat}
                     onPress={() => setCategory(cat)}
                     style={{
-                      backgroundColor: category === cat ? activeColor : t.panelBg,
-                      borderColor: category === cat ? activeColor : t.border,
+                      backgroundColor: category === cat ? '#9D85FF' : t.panelBg,
+                      borderColor: category === cat ? '#9D85FF' : t.border,
                       borderWidth: 1,
                       borderRadius: 18,
                       paddingHorizontal: 12,
@@ -753,7 +864,7 @@ export default function ExpensesScreen() {
                       marginRight: 8,
                     }}
                   >
-                    <Text style={{ color: category === cat ? 'white' : t.text, fontSize: 12, fontWeight: '700' }}>{cat}</Text>
+                    <Text style={{ color: category === cat ? '#12121A' : t.text, fontSize: 12, fontWeight: '700' }}>{cat}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -787,17 +898,17 @@ export default function ExpensesScreen() {
               onPress={handleAddExpense}
               style={{
                 flex: 1.5,
-                backgroundColor: activeColor,
+                backgroundColor: '#9D85FF',
                 borderRadius: 14,
                 padding: 14,
                 alignItems: 'center',
               }}
             >
-              <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Add to Group Log</Text>
+              <Text style={{ color: '#12121A', fontWeight: '800', fontSize: 15 }}>Add to Group Log</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
