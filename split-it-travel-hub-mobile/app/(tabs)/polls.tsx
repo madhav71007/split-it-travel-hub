@@ -4,9 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
 import { supabase } from '@/lib/supabaseClient';
+import { useTrip } from '@/components/TripContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Poll {
   id: string;
+  trip_id: string;
   question: string;
   options: string[];
   votes: Record<string, string>;
@@ -17,50 +21,156 @@ interface Poll {
 export default function PollsScreen() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
+  const { activeTrip, activeTripId } = useTrip();
+
   const [polls, setPolls] = useState<Poll[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [userId, setUserId] = useState('');
 
+  // Check if Supabase is configured
+  const isSupabaseConfigured = () => {
+    const url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+    const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+    return (
+      url.length > 0 &&
+      url.startsWith('https://') &&
+      key.length > 0 &&
+      key !== 'YOUR_COPIED_PUBLISHABLE_ANON_KEY'
+    );
+  };
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? ''));
-    fetchPolls();
   }, []);
 
+  useEffect(() => {
+    if (activeTripId) {
+      fetchPolls();
+    }
+  }, [activeTripId]);
+
   const fetchPolls = async () => {
-    const { data } = await supabase.from('polls').select('*').order('created_at', { ascending: false });
+    if (!activeTripId) return;
+
+    if (!isSupabaseConfigured()) {
+      try {
+        const stored = await AsyncStorage.getItem(`local_polls_${activeTripId}`);
+        setPolls(stored ? JSON.parse(stored) : []);
+      } catch (e) {
+        console.warn('Error reading local polls:', e);
+      }
+      return;
+    }
+
+    const { data } = await supabase
+      .from('polls')
+      .select('*')
+      .eq('trip_id', activeTripId)
+      .order('created_at', { ascending: false });
     if (data) setPolls(data);
   };
 
   const createPoll = async () => {
+    if (!activeTripId) return;
     const validOptions = options.filter((o) => o.trim());
     if (!question.trim() || validOptions.length < 2) return Alert.alert('Error', 'Need a question and at least 2 options');
-    const { error } = await supabase.from('polls').insert([{ question, options: validOptions, votes: {}, created_by: userId }]);
-    if (!error) { setShowAdd(false); setQuestion(''); setOptions(['', '']); fetchPolls(); }
+
+    const newPoll: Poll = {
+      id: `pl_${Date.now()}`,
+      trip_id: activeTripId,
+      question,
+      options: validOptions,
+      votes: {},
+      created_by: userId || 'You',
+      created_at: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('polls').insert([{
+        trip_id: activeTripId,
+        question,
+        options: validOptions,
+        votes: {},
+        created_by: userId,
+      }]);
+      if (!error) {
+        setShowAdd(false);
+        setQuestion('');
+        setOptions(['', '']);
+        fetchPolls();
+      } else {
+        Alert.alert('Save failed', error.message);
+      }
+    } else {
+      const updated = [newPoll, ...polls];
+      setPolls(updated);
+      await AsyncStorage.setItem(`local_polls_${activeTripId}`, JSON.stringify(updated));
+      setShowAdd(false);
+      setQuestion('');
+      setOptions(['', '']);
+    }
   };
 
   const vote = async (poll: Poll, option: string) => {
-    if (poll.votes[userId]) return Alert.alert('Already voted', 'You have already cast your vote.');
-    const updatedVotes = { ...poll.votes, [userId]: option };
-    await supabase.from('polls').update({ votes: updatedVotes }).eq('id', poll.id);
-    fetchPolls();
+    if (!activeTripId) return;
+    const currentUserId = userId || 'You';
+    if (poll.votes[currentUserId]) return Alert.alert('Already voted', 'You have already cast your vote.');
+    const updatedVotes = { ...poll.votes, [currentUserId]: option };
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('polls').update({ votes: updatedVotes }).eq('id', poll.id);
+      if (!error) {
+        fetchPolls();
+      } else {
+        Alert.alert('Vote failed', error.message);
+      }
+    } else {
+      const updated = polls.map((p) =>
+        p.id === poll.id ? { ...p, votes: updatedVotes } : p
+      );
+      setPolls(updated);
+      await AsyncStorage.setItem(`local_polls_${activeTripId}`, JSON.stringify(updated));
+    }
   };
 
-  const getVoteCount = (poll: Poll, option: string) =>
-    Object.values(poll.votes).filter((v) => v === option).length;
+  const getVoteCount = (poll: Poll, option: string) => {
+    return Object.values(poll.votes || {}).filter((v) => v === option).length;
+  };
 
-  const totalVotes = (poll: Poll) => Object.values(poll.votes).length;
+  const totalVotes = (poll: Poll) => {
+    return Object.values(poll.votes || {}).length;
+  };
+
+  if (!activeTripId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.canvasBg }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Ionicons name="checkbox-outline" size={60} color={t.textMuted} />
+          <Text style={{ color: t.text, fontSize: 20, fontWeight: '800', marginTop: 16 }}>
+            No Active Trip
+          </Text>
+          <Text style={{ color: t.textMuted, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
+            Please select or create an active trip on the Dashboard to view and participate in polls.
+          </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <Text style={{ color: t.text, fontSize: 24, fontWeight: '800' }}>🗳 Polls</Text>
           <TouchableOpacity onPress={() => setShowAdd(true)} style={{ backgroundColor: t.btnPrimary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: t.border }}>
             <Text style={{ color: t.btnPrimaryText, fontWeight: '700' }}>+ Poll</Text>
           </TouchableOpacity>
         </View>
+        <Text style={{ color: t.primary, fontSize: 14, fontWeight: '700', marginBottom: 20 }}>
+          {activeTrip?.title}
+        </Text>
 
         {polls.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 60 }}>
@@ -71,7 +181,7 @@ export default function PollsScreen() {
         ) : (
           polls.map((poll) => {
             const total = totalVotes(poll);
-            const myVote = poll.votes[userId];
+            const myVote = poll.votes[userId || 'You'];
             return (
               <View key={poll.id} style={{ backgroundColor: t.panelBg, borderRadius: 18, borderWidth: 1, borderColor: t.border, padding: 18, marginBottom: 14 }}>
                 <Text style={{ color: t.text, fontWeight: '800', fontSize: 17, marginBottom: 14 }}>

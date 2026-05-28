@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image, Modal,
-  FlatList, Dimensions, Alert, ActivityIndicator,
+  Dimensions, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
 import { supabase } from '@/lib/supabaseClient';
+import { useTrip } from '@/components/TripContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const ITEM_W = (SCREEN_W - 48 - 8) / 3;
 
 interface Memory {
   id: string;
+  trip_id: string;
   image_url: string;
   caption: string;
   uploaded_by: string;
@@ -23,14 +27,48 @@ interface Memory {
 export default function MemoriesScreen() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
+  const { activeTrip, activeTripId } = useTrip();
+
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Memory | null>(null);
 
-  useEffect(() => { fetchMemories(); }, []);
+  // Check if Supabase is configured
+  const isSupabaseConfigured = () => {
+    const url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+    const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+    return (
+      url.length > 0 &&
+      url.startsWith('https://') &&
+      key.length > 0 &&
+      key !== 'YOUR_COPIED_PUBLISHABLE_ANON_KEY'
+    );
+  };
+
+  useEffect(() => {
+    if (activeTripId) {
+      fetchMemories();
+    }
+  }, [activeTripId]);
 
   const fetchMemories = async () => {
-    const { data } = await supabase.from('memories').select('*').order('created_at', { ascending: false });
+    if (!activeTripId) return;
+
+    if (!isSupabaseConfigured()) {
+      try {
+        const stored = await AsyncStorage.getItem(`local_memories_${activeTripId}`);
+        setMemories(stored ? JSON.parse(stored) : []);
+      } catch (e) {
+        console.warn('Error reading local memories:', e);
+      }
+      return;
+    }
+
+    const { data } = await supabase
+      .from('memories')
+      .select('*')
+      .eq('trip_id', activeTripId)
+      .order('created_at', { ascending: false });
     if (data) setMemories(data);
   };
 
@@ -48,23 +86,46 @@ export default function MemoriesScreen() {
   };
 
   const uploadMemory = async (asset: ImagePicker.ImagePickerAsset) => {
+    if (!activeTripId) return;
     setLoading(true);
     try {
-      const ext = asset.uri.split('.').pop() ?? 'jpg';
-      const fileName = `${Date.now()}.${ext}`;
-      const formData = new FormData();
-      formData.append('file', { uri: asset.uri, name: fileName, type: `image/${ext}` } as any);
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('trip-memories')
-        .upload(fileName, formData, { contentType: `image/${ext}` });
-      if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('trip-memories').getPublicUrl(fileName);
-      const { error } = await supabase.from('memories').insert([{
-        image_url: urlData.publicUrl,
-        caption: '',
-        uploaded_by: 'You',
-      }]);
-      if (!error) fetchMemories();
+      if (isSupabaseConfigured()) {
+        const ext = asset.uri.split('.').pop() ?? 'jpg';
+        const fileName = `${Date.now()}.${ext}`;
+        const formData = new FormData();
+        formData.append('file', { uri: asset.uri, name: fileName, type: `image/${ext}` } as any);
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('trip-memories')
+          .upload(fileName, formData, { contentType: `image/${ext}` });
+        if (uploadError) throw uploadError;
+        
+        const { data: urlData } = supabase.storage.from('trip-memories').getPublicUrl(fileName);
+        const { error } = await supabase.from('memories').insert([{
+          trip_id: activeTripId,
+          image_url: urlData.publicUrl,
+          caption: '',
+          uploaded_by: 'You',
+        }]);
+        if (!error) {
+          fetchMemories();
+        } else {
+          throw error;
+        }
+      } else {
+        // Local upload - store local file uri directly!
+        const newMemory: Memory = {
+          id: `mem_${Date.now()}`,
+          trip_id: activeTripId,
+          image_url: asset.uri,
+          caption: '',
+          uploaded_by: 'You',
+          created_at: new Date().toISOString(),
+        };
+        const updated = [newMemory, ...memories];
+        setMemories(updated);
+        await AsyncStorage.setItem(`local_memories_${activeTripId}`, JSON.stringify(updated));
+      }
     } catch (e) {
       Alert.alert('Upload failed', String(e));
     } finally {
@@ -72,10 +133,29 @@ export default function MemoriesScreen() {
     }
   };
 
+  if (!activeTripId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.canvasBg }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Ionicons name="images-outline" size={60} color={t.textMuted} />
+          <Text style={{ color: t.text, fontSize: 20, fontWeight: '800', marginTop: 16 }}>
+            No Active Trip
+          </Text>
+          <Text style={{ color: t.textMuted, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
+            Please select or create an active trip on the Dashboard to view and share memories.
+          </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        <Text style={{ color: t.text, fontSize: 24, fontWeight: '800', marginBottom: 16 }}>📸 Memories</Text>
+        <Text style={{ color: t.text, fontSize: 24, fontWeight: '800', marginBottom: 2 }}>📸 Memories</Text>
+        <Text style={{ color: t.primary, fontSize: 14, fontWeight: '700', marginBottom: 20 }}>
+          {activeTrip?.title}
+        </Text>
 
         {/* Upload Zone */}
         <TouchableOpacity

@@ -3,6 +3,7 @@ import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SkyThemeProvider, useSkyTheme } from '@/components/SkyThemeProvider';
+import { TripProvider } from '@/components/TripContext';
 
 function RootLayoutNav() {
   const { phase } = useSkyTheme();
@@ -35,7 +36,10 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SkyThemeProvider>
-      <RootLayoutNav />
+      <TripProvider>
+        <RootLayoutNav />
+      </TripProvider>
     </SkyThemeProvider>
   );
 }
+

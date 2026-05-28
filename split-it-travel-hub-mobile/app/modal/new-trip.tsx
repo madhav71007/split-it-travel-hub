@@ -3,17 +3,13 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform } 
 import { useRouter } from 'expo-router';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
-import { supabase } from '@/lib/supabaseClient';
-
-function generateInviteCode(length = 8): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
+import { useTrip } from '@/components/TripContext';
 
 export default function NewTripModal() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
   const router = useRouter();
+  const { createTrip } = useTrip();
 
   const [form, setForm] = useState({
     title: '',
@@ -21,29 +17,42 @@ export default function NewTripModal() {
     start_date: '',
     end_date: '',
   });
+  const [membersList, setMembersList] = useState<string[]>(['You']);
+  const [newMemberName, setNewMemberName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleAddMemberToList = () => {
+    const trimmed = newMemberName.trim();
+    if (!trimmed) return;
+    if (membersList.some((m) => m.toLowerCase() === trimmed.toLowerCase())) {
+      return Alert.alert('Duplicate Member', 'A member with this name already exists.');
+    }
+    setMembersList([...membersList, trimmed]);
+    setNewMemberName('');
+  };
+
+  const handleRemoveMemberFromList = (index: number) => {
+    setMembersList(membersList.filter((_, idx) => idx !== index));
+  };
 
   const handleCreate = async () => {
     if (!form.title.trim() || !form.destination.trim()) {
       return Alert.alert('Missing fields', 'Title and Destination are required.');
     }
+    if (membersList.length === 0) {
+      return Alert.alert('Missing members', 'Please add at least one member.');
+    }
     setLoading(true);
-    const { data: userData } = await supabase.auth.getUser();
-    const invite_code = generateInviteCode();
-    const { error } = await supabase.from('trips').insert([{
-      title: form.title.trim(),
-      destination: form.destination.trim(),
-      start_date: form.start_date || null,
-      end_date: form.end_date || null,
-      invite_code,
-      owner_id: userData.user?.id,
-      is_active: true,
-    }]);
+    const trip = await createTrip(
+      form.title.trim(),
+      form.destination.trim(),
+      form.start_date || '',
+      form.end_date || '',
+      membersList
+    );
     setLoading(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      Alert.alert('🎉 Trip Created!', `Invite code: ${invite_code}`, [
+    if (trip) {
+      Alert.alert('🎉 Trip Created!', `Invite code: ${trip.invite_code}`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     }
@@ -91,6 +100,69 @@ export default function NewTripModal() {
             />
           </View>
         ))}
+
+        {/* Dynamic Members Section */}
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ color: t.label, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
+            Group Members *
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+            <TextInput
+              value={newMemberName}
+              onChangeText={setNewMemberName}
+              placeholder="Add member name..."
+              placeholderTextColor={t.textMuted}
+              style={{
+                flex: 1,
+                backgroundColor: t.inputBg,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: t.inputBorder,
+                padding: 14,
+                color: t.inputText,
+                fontSize: 16,
+              }}
+              onSubmitEditing={handleAddMemberToList}
+            />
+            <TouchableOpacity
+              onPress={handleAddMemberToList}
+              style={{
+                backgroundColor: t.btnPrimary,
+                borderRadius: 14,
+                paddingHorizontal: 20,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: t.btnPrimaryText, fontWeight: '800', fontSize: 20 }}>+</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Members list pills */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {membersList.map((m, idx) => (
+              <View
+                key={idx}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: t.panelBg,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: t.border,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  gap: 6,
+                }}
+              >
+                <Text style={{ color: t.text, fontSize: 13, fontWeight: '600' }}>{m}</Text>
+                <TouchableOpacity onPress={() => handleRemoveMemberFromList(idx)}>
+                  <Text style={{ color: t.secondary, fontWeight: '700', fontSize: 14, marginLeft: 2 }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        </View>
 
         {/* Invite code preview */}
         <View style={{ backgroundColor: t.panelBg, borderRadius: 14, borderWidth: 1, borderColor: t.border, padding: 16, marginBottom: 28 }}>

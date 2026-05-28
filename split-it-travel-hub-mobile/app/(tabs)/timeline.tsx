@@ -6,6 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
 import { supabase } from '@/lib/supabaseClient';
+import { useTrip } from '@/components/TripContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 interface TimelineEvent {
   id: string;
@@ -22,24 +25,59 @@ interface TimelineEvent {
 export default function TimelineScreen() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
+  const { activeTrip, activeTripId } = useTrip();
+
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', location: '', time: '', emoji: '📍' });
 
-  useEffect(() => { fetchEvents(); }, []);
+  // Check if Supabase is configured
+  const isSupabaseConfigured = () => {
+    const url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+    const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+    return (
+      url.length > 0 &&
+      url.startsWith('https://') &&
+      key.length > 0 &&
+      key !== 'YOUR_COPIED_PUBLISHABLE_ANON_KEY'
+    );
+  };
+
+  useEffect(() => {
+    if (activeTripId) {
+      fetchEvents();
+    }
+  }, [activeTripId]);
 
   const fetchEvents = async () => {
+    if (!activeTripId) return;
+
+    if (!isSupabaseConfigured()) {
+      try {
+        const stored = await AsyncStorage.getItem(`local_timeline_${activeTripId}`);
+        setEvents(stored ? JSON.parse(stored) : []);
+      } catch (e) {
+        console.warn('Error reading local itinerary:', e);
+      }
+      return;
+    }
+
     const { data } = await supabase
       .from('itinerary_events')
       .select('*')
+      .eq('trip_id', activeTripId)
       .order('day_number', { ascending: true })
       .order('time', { ascending: true });
     if (data) setEvents(data);
   };
 
   const addEvent = async () => {
+    if (!activeTripId) return;
     if (!form.title.trim()) return Alert.alert('Error', 'Please enter a title');
-    const { error } = await supabase.from('itinerary_events').insert([{
+
+    const newEvent = {
+      id: `ev_${Date.now()}`,
+      trip_id: activeTripId,
       title: form.title,
       description: form.description,
       location: form.location,
@@ -47,8 +85,36 @@ export default function TimelineScreen() {
       emoji: form.emoji || '📍',
       date: new Date().toISOString().split('T')[0],
       day_number: 1,
-    }]);
-    if (!error) { setShowAdd(false); setForm({ title: '', description: '', location: '', time: '', emoji: '📍' }); fetchEvents(); }
+    };
+
+    if (isSupabaseConfigured()) {
+      const { error } = await supabase.from('itinerary_events').insert([{
+        trip_id: activeTripId,
+        title: form.title,
+        description: form.description,
+        location: form.location,
+        time: form.time,
+        emoji: form.emoji || '📍',
+        date: newEvent.date,
+        day_number: newEvent.day_number,
+      }]);
+      if (!error) {
+        setShowAdd(false);
+        setForm({ title: '', description: '', location: '', time: '', emoji: '📍' });
+        fetchEvents();
+      } else {
+        Alert.alert('Save failed', error.message);
+      }
+    } else {
+      const updated = [...events, newEvent].sort((a, b) => {
+        if (a.day_number !== b.day_number) return a.day_number - b.day_number;
+        return a.time.localeCompare(b.time);
+      });
+      setEvents(updated);
+      await AsyncStorage.setItem(`local_timeline_${activeTripId}`, JSON.stringify(updated));
+      setShowAdd(false);
+      setForm({ title: '', description: '', location: '', time: '', emoji: '📍' });
+    }
   };
 
   const grouped = events.reduce((acc, e) => {
@@ -58,12 +124,28 @@ export default function TimelineScreen() {
     return acc;
   }, {} as Record<string, TimelineEvent[]>);
 
+  if (!activeTripId) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.canvasBg }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Ionicons name="calendar-outline" size={60} color={t.textMuted} />
+          <Text style={{ color: t.text, fontSize: 20, fontWeight: '800', marginTop: 16 }}>
+            No Active Trip
+          </Text>
+          <Text style={{ color: t.textMuted, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
+            Please select or create an active trip on the Dashboard to view and log itinerary events.
+          </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <Text style={{ color: t.text, fontSize: 24, fontWeight: '800' }}>🗓 Timeline</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <Text style={{ color: t.text, fontSize: 24, fontWeight: '800' }}>🗓 Itinerary</Text>
           <TouchableOpacity
             onPress={() => setShowAdd(true)}
             style={{ backgroundColor: t.btnPrimary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: t.border }}
@@ -71,6 +153,9 @@ export default function TimelineScreen() {
             <Text style={{ color: t.btnPrimaryText, fontWeight: '700' }}>+ Add</Text>
           </TouchableOpacity>
         </View>
+        <Text style={{ color: t.primary, fontSize: 14, fontWeight: '700', marginBottom: 20 }}>
+          {activeTrip?.title}
+        </Text>
 
         {/* Timeline Groups */}
         {Object.entries(grouped).length === 0 ? (
