@@ -6,6 +6,8 @@ import { THEME } from '@/constants/theme';
 import { useTrip } from '@/components/TripContext';
 import { useSubscription } from '@/components/SubscriptionContext';
 import { PRO_LIMITS } from '@/constants/subscription';
+import { Ionicons } from '@expo/vector-icons';
+import CalendarPickerModal from '@/components/CalendarPickerModal';
 
 export default function NewTripModal() {
   const { phase } = useSkyTheme();
@@ -23,6 +25,7 @@ export default function NewTripModal() {
   const [membersList, setMembersList] = useState<string[]>(['You']);
   const [newMemberName, setNewMemberName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const handleAddMemberToList = () => {
     const trimmed = newMemberName.trim();
@@ -87,13 +90,6 @@ export default function NewTripModal() {
     }
   };
 
-  const fields = [
-    { key: 'title', label: 'Trip Title *', placeholder: 'e.g. Summer in Bali' },
-    { key: 'destination', label: 'Destination *', placeholder: 'e.g. Bali, Indonesia' },
-    { key: 'start_date', label: 'Start Date', placeholder: 'YYYY-MM-DD' },
-    { key: 'end_date', label: 'End Date', placeholder: 'YYYY-MM-DD' },
-  ];
-
   return (
     <View style={{ flex: 1, backgroundColor: t.gradientFrom }}>
       <ScrollView contentContainerStyle={{ padding: 24 }}>
@@ -118,28 +114,86 @@ export default function NewTripModal() {
           </View>
         )}
 
-        {fields.map(({ key, label, placeholder }) => (
-          <View key={key} style={{ marginBottom: 18 }}>
-            <Text style={{ color: t.label, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
-              {label}
-            </Text>
-            <TextInput
-              value={(form as any)[key]}
-              onChangeText={(v) => setForm((f) => ({ ...f, [key]: v }))}
-              placeholder={placeholder}
-              placeholderTextColor={t.textMuted}
-              style={{
-                backgroundColor: t.inputBg,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: t.inputBorder,
-                padding: 14,
-                color: t.inputText,
-                fontSize: 16,
-              }}
-            />
-          </View>
-        ))}
+        {/* Trip Title */}
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ color: t.label, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
+            Trip Title *
+          </Text>
+          <TextInput
+            value={form.title}
+            onChangeText={(v) => setForm((f) => ({ ...f, title: v }))}
+            placeholder="e.g. Summer in Bali"
+            placeholderTextColor={t.textMuted}
+            style={{
+              backgroundColor: t.inputBg,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: t.inputBorder,
+              padding: 14,
+              color: t.inputText,
+              fontSize: 16,
+            }}
+          />
+        </View>
+
+        {/* Destination */}
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ color: t.label, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
+            Destination *
+          </Text>
+          <TextInput
+            value={form.destination}
+            onChangeText={(v) => setForm((f) => ({ ...f, destination: v }))}
+            placeholder="e.g. Bali, Indonesia"
+            placeholderTextColor={t.textMuted}
+            style={{
+              backgroundColor: t.inputBg,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: t.inputBorder,
+              padding: 14,
+              color: t.inputText,
+              fontSize: 16,
+            }}
+          />
+        </View>
+
+        {/* Start Date & End Date Row */}
+        <View style={{ marginBottom: 18 }}>
+          <Text style={{ color: t.label, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>
+            Travel Dates
+          </Text>
+          <TouchableOpacity
+            onPress={() => setShowCalendar(true)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: t.inputBg,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: t.inputBorder,
+              padding: 14,
+              gap: 12,
+            }}
+          >
+            <Ionicons name="calendar-outline" size={20} color={t.textMuted} />
+            <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ color: t.textMuted, fontSize: 10, fontWeight: '600' }}>START</Text>
+                <Text style={{ color: form.start_date ? t.inputText : t.textMuted, fontSize: 15, fontWeight: '700', marginTop: 2 }}>
+                  {form.start_date || 'YYYY-MM-DD'}
+                </Text>
+              </View>
+              <View style={{ width: 1, height: 24, backgroundColor: t.border, marginHorizontal: 8 }} />
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ color: t.textMuted, fontSize: 10, fontWeight: '600' }}>END</Text>
+                <Text style={{ color: form.end_date ? t.inputText : t.textMuted, fontSize: 15, fontWeight: '700', marginTop: 2 }}>
+                  {form.end_date || 'YYYY-MM-DD'}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
 
         {/* Dynamic Members Section */}
         <View style={{ marginBottom: 18 }}>
@@ -234,6 +288,15 @@ export default function NewTripModal() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Calendar Modal */}
+      <CalendarPickerModal
+        visible={showCalendar}
+        onClose={() => setShowCalendar(false)}
+        startDate={form.start_date}
+        endDate={form.end_date}
+        onSelectRange={(start, end) => setForm((f) => ({ ...f, start_date: start, end_date: end }))}
+      />
     </View>
   );
 }
