@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useTrip } from '@/components/TripContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useSubscription } from '@/components/SubscriptionContext';
+import { useRouter, type Href } from 'expo-router';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const ITEM_W = (SCREEN_W - 48 - 8) / 3;
@@ -28,6 +30,8 @@ export default function MemoriesScreen() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
   const { activeTrip, activeTripId } = useTrip();
+  const subscription = useSubscription();
+  const router = useRouter();
 
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(false);
@@ -144,6 +148,99 @@ export default function MemoriesScreen() {
           <Text style={{ color: t.textMuted, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
             Please select or create an active trip on the Dashboard to view and share memories.
           </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (!subscription.isPro) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.canvasBg }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          {/* Hexagon/Diamond Icon Container */}
+          <View
+            style={{
+              width: 86,
+              height: 86,
+              borderRadius: 24,
+              backgroundColor: t.panelBg,
+              borderWidth: 1,
+              borderColor: t.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+            }}
+          >
+            <Ionicons name="images" size={40} color={t.primary} />
+          </View>
+
+          {/* Heading with Diamond */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="diamond" size={14} color={t.secondary} />
+            <Text style={{ color: t.text, fontSize: 20, fontWeight: '900', textAlign: 'center' }}>
+              Trip Memory Archive
+            </Text>
+          </View>
+
+          {/* Value Prop */}
+          <Text style={{ color: t.textMuted, fontSize: 13, textAlign: 'center', marginTop: 10, lineHeight: 20, paddingHorizontal: 16 }}>
+            Preserve and share group photos, travel files, and receipt scans, securely backed up in the cloud forever.
+          </Text>
+
+          {/* Card Mockup Preview (slightly faded/bordered) */}
+          <View
+            style={{
+              width: '100%',
+              backgroundColor: t.panelBg,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: t.border,
+              padding: 16,
+              marginVertical: 24,
+              opacity: 0.3,
+            }}
+          >
+            <Text style={{ color: t.text, fontWeight: '800', fontSize: 15, marginBottom: 12 }}>
+              📸 Recent Shared Media
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[1, 2, 3].map((i) => (
+                <View
+                  key={i}
+                  style={{
+                    width: ITEM_W,
+                    height: ITEM_W,
+                    borderRadius: 12,
+                    backgroundColor: t.panelBgAlt,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: t.border,
+                  }}
+                >
+                  <Ionicons name="image-outline" size={24} color={t.textMuted} />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* CTA Button */}
+          <TouchableOpacity
+            onPress={() => router.push('/modal/subscription' as Href)}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock Memory Archive"
+            style={{
+              backgroundColor: t.btnPrimary,
+              borderRadius: 10,
+              paddingVertical: 14,
+              paddingHorizontal: 28,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: t.btnPrimaryText, fontSize: 14, fontWeight: '900', letterSpacing: 0.5 }}>
+              Unlock Memory Archive
+            </Text>
+          </TouchableOpacity>
         </SafeAreaView>
       </View>
     );

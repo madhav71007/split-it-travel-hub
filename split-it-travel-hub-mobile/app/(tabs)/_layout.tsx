@@ -14,24 +14,25 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: t.panelBg,
-          borderTopColor: 'rgba(157,133,255,0.06)',
+          borderTopColor: t.border,
           borderTopWidth: 1,
           height: Platform.OS === 'ios' ? 90 : 70,
           paddingBottom: Platform.OS === 'ios' ? 30 : 12,
           paddingTop: 10,
-          elevation: 8,
+          elevation: 12,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
+          shadowOpacity: 0.22,
+          shadowRadius: 10,
         },
+        tabBarShowLabel: false,
         tabBarActiveTintColor: t.primary,
         tabBarInactiveTintColor: t.textMuted,
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '700',
+          fontSize: 9,
+          fontWeight: '900',
           fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
-          letterSpacing: 0.5,
+          letterSpacing: 0,
           marginTop: 4,
         },
       }}
@@ -39,7 +40,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'DASHBOARD',
+          title: 'HOME',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'grid' : 'grid-outline'} size={22} color={color} />
           ),
@@ -48,7 +49,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="timeline"
         options={{
-          title: 'ITINERARY',
+          title: 'PLAN',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
           ),
@@ -57,7 +58,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="expenses"
         options={{
-          title: 'EXPENSES',
+          title: 'SPLIT',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'wallet' : 'wallet-outline'} size={22} color={color} />
           ),
@@ -66,7 +67,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="convoy"
         options={{
-          title: 'CONVOY',
+          title: 'CARS',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'car' : 'car-outline'} size={22} color={color} />
           ),
@@ -75,7 +76,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="polls"
         options={{
-          title: 'POLLS',
+          title: 'VOTE',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'checkbox' : 'checkbox-outline'} size={22} color={color} />
           ),
@@ -84,7 +85,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="memories"
         options={{
-          title: 'MEMORIES',
+          title: 'MEDIA',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'images' : 'images-outline'} size={22} color={color} />
           ),
@@ -93,5 +94,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-

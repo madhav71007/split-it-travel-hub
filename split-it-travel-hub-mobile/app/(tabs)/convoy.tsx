@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useTrip } from '@/components/TripContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useSubscription } from '@/components/SubscriptionContext';
+import { useRouter, type Href } from 'expo-router';
 
 interface Vehicle {
   id: string;
@@ -22,6 +24,8 @@ export default function ConvoyScreen() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
   const { activeTrip, activeTripId, members } = useTrip();
+  const subscription = useSubscription();
+  const router = useRouter();
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -157,6 +161,90 @@ export default function ConvoyScreen() {
           <Text style={{ color: t.textMuted, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
             Please select or create an active trip on the Dashboard to view and manage convoy vehicles.
           </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (!subscription.isPro) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.canvasBg }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          {/* Hexagon/Diamond Icon Container */}
+          <View
+            style={{
+              width: 86,
+              height: 86,
+              borderRadius: 24,
+              backgroundColor: t.panelBg,
+              borderWidth: 1,
+              borderColor: t.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+            }}
+          >
+            <Ionicons name="navigate" size={40} color={t.primary} />
+          </View>
+
+          {/* Heading with Diamond */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="diamond" size={14} color={t.secondary} />
+            <Text style={{ color: t.text, fontSize: 20, fontWeight: '900', textAlign: 'center' }}>
+              Live Convoy Command
+            </Text>
+          </View>
+
+          {/* Value Prop */}
+          <Text style={{ color: t.textMuted, fontSize: 13, textAlign: 'center', marginTop: 10, lineHeight: 20, paddingHorizontal: 16 }}>
+            Coordinate cars, driver capacities, passenger lists, and arrival readiness in real time with your crew.
+          </Text>
+
+          {/* Card Mockup Preview (slightly faded/blurred/bordered) */}
+          <View
+            style={{
+              width: '100%',
+              backgroundColor: t.panelBg,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: t.border,
+              padding: 16,
+              marginVertical: 24,
+              opacity: 0.35,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 24 }}>🚗</Text>
+                <View>
+                  <Text style={{ color: t.text, fontWeight: '800', fontSize: 14 }}>Tata Harrier (SUV)</Text>
+                  <Text style={{ color: t.textMuted, fontSize: 11 }}>👤 Driver: Bob</Text>
+                </View>
+              </View>
+              <Text style={{ color: t.text, fontWeight: '800', fontSize: 16 }}>3/5 seats</Text>
+            </View>
+            <View style={{ height: 6, backgroundColor: t.panelBgAlt, borderRadius: 3, marginTop: 12, overflow: 'hidden' }}>
+              <View style={{ width: '60%', height: '100%', backgroundColor: t.primary }} />
+            </View>
+          </View>
+
+          {/* CTA Button */}
+          <TouchableOpacity
+            onPress={() => router.push('/modal/subscription' as Href)}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock Convoy Command"
+            style={{
+              backgroundColor: t.btnPrimary,
+              borderRadius: 10,
+              paddingVertical: 14,
+              paddingHorizontal: 28,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: t.btnPrimaryText, fontSize: 14, fontWeight: '900', letterSpacing: 0.5 }}>
+              Unlock Convoy Command
+            </Text>
+          </TouchableOpacity>
         </SafeAreaView>
       </View>
     );

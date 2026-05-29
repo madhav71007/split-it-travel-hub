@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useTrip } from '@/components/TripContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useSubscription } from '@/components/SubscriptionContext';
+import { useRouter, type Href } from 'expo-router';
 
 interface Poll {
   id: string;
@@ -22,6 +24,8 @@ export default function PollsScreen() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
   const { activeTrip, activeTripId } = useTrip();
+  const subscription = useSubscription();
+  const router = useRouter();
 
   const [polls, setPolls] = useState<Poll[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -154,6 +158,96 @@ export default function PollsScreen() {
           <Text style={{ color: t.textMuted, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
             Please select or create an active trip on the Dashboard to view and participate in polls.
           </Text>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (!subscription.isPro) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.canvasBg }}>
+        <SafeAreaView edges={['top']} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          {/* Hexagon/Diamond Icon Container */}
+          <View
+            style={{
+              width: 86,
+              height: 86,
+              borderRadius: 24,
+              backgroundColor: t.panelBg,
+              borderWidth: 1,
+              borderColor: t.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+            }}
+          >
+            <Ionicons name="checkbox" size={40} color={t.primary} />
+          </View>
+
+          {/* Heading with Diamond */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="diamond" size={14} color={t.secondary} />
+            <Text style={{ color: t.text, fontSize: 20, fontWeight: '900', textAlign: 'center' }}>
+              Priority Decisions
+            </Text>
+          </View>
+
+          {/* Value Prop */}
+          <Text style={{ color: t.textMuted, fontSize: 13, textAlign: 'center', marginTop: 10, lineHeight: 20, paddingHorizontal: 16 }}>
+            Democratize your route planning, dining choices, and activity budgets with interactive real-time crew voting.
+          </Text>
+
+          {/* Card Mockup Preview (slightly faded/bordered) */}
+          <View
+            style={{
+              width: '100%',
+              backgroundColor: t.panelBg,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: t.border,
+              padding: 16,
+              marginVertical: 24,
+              opacity: 0.35,
+            }}
+          >
+            <Text style={{ color: t.text, fontWeight: '800', fontSize: 15, marginBottom: 12 }}>
+              📍 Next Dinner Spot?
+            </Text>
+            
+            <View style={{ marginBottom: 10, borderRadius: 10, borderWidth: 1, borderColor: t.border, padding: 10, backgroundColor: t.panelBgAlt, overflow: 'hidden' }}>
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '70%', backgroundColor: t.accent, opacity: 0.3 }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: t.text, fontSize: 13, fontWeight: '600' }}>🏆 Beachside Seafood Grill ✓</Text>
+                <Text style={{ color: t.textMuted, fontSize: 12 }}>70%</Text>
+              </View>
+            </View>
+
+            <View style={{ borderRadius: 10, borderWidth: 1, borderColor: t.border, padding: 10, backgroundColor: t.panelBgAlt, overflow: 'hidden' }}>
+              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '30%', backgroundColor: t.accent, opacity: 0.3 }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: t.text, fontSize: 13, fontWeight: '500' }}>Downtown Pizzeria</Text>
+                <Text style={{ color: t.textMuted, fontSize: 12 }}>30%</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* CTA Button */}
+          <TouchableOpacity
+            onPress={() => router.push('/modal/subscription' as Href)}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock Group Decisions"
+            style={{
+              backgroundColor: t.btnPrimary,
+              borderRadius: 10,
+              paddingVertical: 14,
+              paddingHorizontal: 28,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: t.btnPrimaryText, fontSize: 14, fontWeight: '900', letterSpacing: 0.5 }}>
+              Unlock Group Decisions
+            </Text>
+          </TouchableOpacity>
         </SafeAreaView>
       </View>
     );

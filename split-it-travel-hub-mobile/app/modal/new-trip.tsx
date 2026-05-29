@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
 import { useTrip } from '@/components/TripContext';
+import { useSubscription } from '@/components/SubscriptionContext';
+import { PRO_LIMITS } from '@/constants/subscription';
 
 export default function NewTripModal() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
   const router = useRouter();
-  const { createTrip } = useTrip();
+  const { createTrip, trips } = useTrip();
+  const subscription = useSubscription();
 
   const [form, setForm] = useState({
     title: '',
@@ -27,6 +30,19 @@ export default function NewTripModal() {
     if (membersList.some((m) => m.toLowerCase() === trimmed.toLowerCase())) {
       return Alert.alert('Duplicate Member', 'A member with this name already exists.');
     }
+    
+    // Enforce free member limit
+    if (!subscription.isPro && membersList.length >= PRO_LIMITS.freeMembers) {
+      return Alert.alert(
+        'Upgrade to Pro',
+        `The Free plan is limited to ${PRO_LIMITS.freeMembers} members per trip. Upgrade to Pro Traveller for unlimited group members.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'View Plans', onPress: () => router.push('/modal/subscription' as Href) }
+        ]
+      );
+    }
+
     setMembersList([...membersList, trimmed]);
     setNewMemberName('');
   };
@@ -42,6 +58,19 @@ export default function NewTripModal() {
     if (membersList.length === 0) {
       return Alert.alert('Missing members', 'Please add at least one member.');
     }
+
+    // Enforce active trip limit
+    if (!subscription.isPro && trips.length >= PRO_LIMITS.freeTrips) {
+      return Alert.alert(
+        'Upgrade to Pro',
+        `The Free plan is limited to ${PRO_LIMITS.freeTrips} active trip. Upgrade to Pro Traveller for unlimited trips.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'View Plans', onPress: () => router.push('/modal/subscription' as Href) }
+        ]
+      );
+    }
+
     setLoading(true);
     const trip = await createTrip(
       form.title.trim(),
@@ -77,6 +106,17 @@ export default function NewTripModal() {
         <Text style={{ color: t.textMuted, fontSize: 14, marginBottom: 28 }}>
           A unique invite code will be auto-generated so friends can join.
         </Text>
+
+        {!subscription.isPro && trips.length >= PRO_LIMITS.freeTrips && (
+          <View style={{ backgroundColor: 'rgba(244, 184, 96, 0.1)', borderWidth: 1, borderColor: t.secondary, borderRadius: 8, padding: 12, marginBottom: 18 }}>
+            <Text style={{ color: t.secondary, fontSize: 12, fontWeight: '900' }}>
+              ⚠️ ACTIVE TRIP LIMIT REACHED
+            </Text>
+            <Text style={{ color: t.textMuted, fontSize: 11, marginTop: 4, lineHeight: 16 }}>
+              You are currently using the Free Plan which allows up to {PRO_LIMITS.freeTrips} active trip. Upgrade to Pro to create unlimited trips.
+            </Text>
+          </View>
+        )}
 
         {fields.map(({ key, label, placeholder }) => (
           <View key={key} style={{ marginBottom: 18 }}>

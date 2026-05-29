@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SkyThemeProvider, useSkyTheme } from '@/components/SkyThemeProvider';
 import { TripProvider } from '@/components/TripContext';
+import { SubscriptionProvider } from '@/components/SubscriptionContext';
 
 function RootLayoutNav() {
   const { phase } = useSkyTheme();
@@ -28,6 +29,14 @@ function RootLayoutNav() {
             headerShown: false,
           }}
         />
+        <Stack.Screen
+          name="modal/subscription"
+          options={{
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+            headerShown: false,
+          }}
+        />
       </Stack>
     </>
   );
@@ -36,10 +45,11 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SkyThemeProvider>
-      <TripProvider>
-        <RootLayoutNav />
-      </TripProvider>
+      <SubscriptionProvider>
+        <TripProvider>
+          <RootLayoutNav />
+        </TripProvider>
+      </SubscriptionProvider>
     </SkyThemeProvider>
   );
 }
-

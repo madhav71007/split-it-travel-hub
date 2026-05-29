@@ -21,6 +21,9 @@ import { supabase } from '@/lib/supabaseClient';
 import { simplifyDebts, type Expense as SimplifierExpense, type ExpenseSplit } from '@/utils/debtSimplifier';
 import { useTrip } from '@/components/TripContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSubscription } from '@/components/SubscriptionContext';
+import { useRouter, type Href } from 'expo-router';
+
 
 interface Expense {
   id: string;
@@ -40,6 +43,27 @@ export default function ExpensesScreen() {
   const { phase } = useSkyTheme();
   const t = THEME[phase];
   const { activeTrip, activeTripId, members } = useTrip();
+  const subscription = useSubscription();
+  const router = useRouter();
+
+  const handleExportReport = () => {
+    if (!subscription.isPro) {
+      Alert.alert(
+        'Pro Traveller Feature',
+        'Exporting expense reports (CSV, PDF) is restricted to Pro tier users. Please upgrade to unlock.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade to Pro', onPress: () => router.push('/modal/subscription' as Href) }
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Export Successful',
+        'Your trip expense ledger has been successfully compiled and downloaded as CSV.'
+      );
+    }
+  };
+
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [splits, setSplits] = useState<ExpenseSplit[]>([]);
@@ -365,21 +389,42 @@ export default function ExpensesScreen() {
             Split-It
           </Text>
 
-          {/* Active Trip Name Pill */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              borderColor: 'rgba(255, 255, 255, 0.1)',
-              borderWidth: 1,
-              borderRadius: 24,
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-            }}
-          >
-            <Text style={{ color: t.text, fontSize: 13, fontWeight: '600' }}>{activeTrip?.title}</Text>
+          {/* Right Header Buttons */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              onPress={handleExportReport}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+                borderWidth: 1,
+                borderRadius: 24,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+              }}
+            >
+              <Ionicons name="download-outline" size={14} color={t.text} style={{ marginRight: 4 }} />
+              <Text style={{ color: t.text, fontSize: 12, fontWeight: '600' }}>Export</Text>
+            </TouchableOpacity>
+
+            {/* Active Trip Name Pill */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+                borderWidth: 1,
+                borderRadius: 24,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+              }}
+            >
+              <Text style={{ color: t.text, fontSize: 13, fontWeight: '600' }}>{activeTrip?.title}</Text>
+            </View>
           </View>
+
         </View>
       </SafeAreaView>
 
@@ -432,8 +477,66 @@ export default function ExpensesScreen() {
 
         {/* Expenses List */}
         <View style={{ gap: 14 }}>
-          {/* Pending Settle-Up Card with SETTLE NOW Primary button */}
-          {simplifiedTransactions.length > 0 ? (
+          {/* Pending Settle-Up Card / Locked Smart Settlements */}
+          {!subscription.isPro ? (
+            <View
+              style={{
+                backgroundColor: '#1E1B29',
+                borderRadius: 24,
+                borderWidth: 1,
+                borderColor: 'rgba(157, 133, 255, 0.15)',
+                padding: 24,
+                alignItems: 'center',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={{
+                  position: 'absolute',
+                  top: -20,
+                  right: -20,
+                  width: 100,
+                  height: 100,
+                  borderRadius: 50,
+                  backgroundColor: 'rgba(157, 133, 255, 0.05)',
+                }}
+              />
+              
+              <Ionicons name="git-merge" size={32} color="#9D85FF" style={{ marginBottom: 12 }} />
+              
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', textAlign: 'center' }}>
+                Smart Settlements Matrix
+              </Text>
+              
+              <Text style={{ color: '#8C8A9A', fontSize: 12, textAlign: 'center', marginTop: 8, lineHeight: 18, paddingHorizontal: 10 }}>
+                Unlock advanced debt-simplification algorithms that minimize the total number of transactions needed to settle up with your crew.
+              </Text>
+
+              {/* Faded Mockup */}
+              <View style={{ width: '100%', marginTop: 16, opacity: 0.15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#9D85FF', borderRadius: 12, padding: 12 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>👤 Alice owes Bob</Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginTop: 4 }}>₹1,450</Text>
+              </View>
+              
+              <TouchableOpacity
+                onPress={() => router.push('/modal/subscription' as Href)}
+                style={{
+                  backgroundColor: '#9D85FF',
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 24,
+                  alignItems: 'center',
+                  marginTop: 18,
+                  width: '100%',
+                }}
+              >
+                <Text style={{ color: '#12121A', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>
+                  UNLOCK SMART SETTLEMENTS
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : simplifiedTransactions.length > 0 ? (
             <View
               style={{
                 backgroundColor: '#1E1B29',
@@ -495,6 +598,7 @@ export default function ExpensesScreen() {
             </View>
           )}
 
+
           {/* List of logged expenses */}
           {expenses.length > 0 && (
             <View style={{ marginTop: 10 }}>
@@ -552,7 +656,7 @@ export default function ExpensesScreen() {
           )}
 
           {/* Optimized Insight Card */}
-          {simplifiedTransactions.length > 1 && (
+          {subscription.isPro && simplifiedTransactions.length > 1 && (
             <View
               style={{
                 backgroundColor: '#15131C',

@@ -11,23 +11,56 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
 import { supabase } from '@/lib/supabaseClient';
 import { useTrip, type Trip } from '@/components/TripContext';
+import { useSubscription } from '@/components/SubscriptionContext';
+import { PRO_FEATURES, PRO_PLAN, PRO_LIMITS } from '@/constants/subscription';
 import { Ionicons } from '@expo/vector-icons';
 
+const SUBSCRIPTION_ROUTE = '/modal/subscription' as Href;
+
 const PHASE_LABELS: Record<string, string> = {
-  morning: '🌅 Good Day',
-  evening: '🌇 Good Evening',
+  morning: 'Good day',
+  evening: 'Good evening',
 };
 
 const PHASE_BADGES: Record<string, string> = {
-  morning: '🌤 Light Mode',
-  evening: '🌇 Dark Mode',
+  morning: 'Light command view',
+  evening: 'Night command view',
 };
+
+function DashboardMetric({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        minHeight: 68,
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ color: tone, fontSize: 18, fontWeight: '900' }}>{value}</Text>
+      <Text
+        style={{
+          color: '#8C8A9A',
+          fontSize: 10,
+          fontWeight: '900',
+          letterSpacing: 0.6,
+          marginTop: 4,
+        }}
+      >
+        {label.toUpperCase()}
+      </Text>
+    </View>
+  );
+}
 
 export default function DashboardScreen() {
   const { phase, setManualPhase, isManual } = useSkyTheme();
@@ -44,6 +77,7 @@ export default function DashboardScreen() {
     addMember,
     removeMember,
   } = useTrip();
+  const subscription = useSubscription();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [inviteInput, setInviteInput] = useState('');
@@ -106,6 +140,19 @@ export default function DashboardScreen() {
     if (!joinNameInput.trim()) {
       return Alert.alert('Error', 'Please enter your name to join the trip.');
     }
+    
+    // Enforce free active trip limit
+    if (!subscription.isPro && trips.length >= PRO_LIMITS.freeTrips) {
+      return Alert.alert(
+        'Upgrade to Pro',
+        `The Free plan is limited to ${PRO_LIMITS.freeTrips} active trip. Upgrade to Pro Traveller to join or create unlimited trips.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'View Plans', onPress: () => router.push(SUBSCRIPTION_ROUTE) }
+        ]
+      );
+    }
+
     setJoining(true);
     const joined = await joinTrip(inviteInput.trim(), joinNameInput.trim());
     setJoining(false);
@@ -122,6 +169,19 @@ export default function DashboardScreen() {
     if (members.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) {
       return Alert.alert('Duplicate', 'This member already exists.');
     }
+    
+    // Enforce free member limit
+    if (!subscription.isPro && members.length >= PRO_LIMITS.freeMembers) {
+      return Alert.alert(
+        'Upgrade to Pro',
+        `The Free plan is limited to ${PRO_LIMITS.freeMembers} members per trip. Upgrade to Pro Traveller to add unlimited crew members.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'View Plans', onPress: () => router.push(SUBSCRIPTION_ROUTE) }
+        ]
+      );
+    }
+
     await addMember(trimmed);
     setNewMemberInput('');
   };
@@ -139,33 +199,170 @@ export default function DashboardScreen() {
   const completedTrips = trips.filter(
     (trip) => !trip.is_active || (trip.end_date && trip.end_date < today)
   );
+  const readinessScore = activeTrip
+    ? Math.min(
+        98,
+        56 + members.length * 6 + (activeTrip.start_date ? 10 : 0) + (subscription.isPro ? 8 : 0)
+      )
+    : 0;
+  const proStatus = subscription.isPro
+    ? subscription.daysLeftInTrial > 0
+      ? `Pro trial: ${subscription.daysLeftInTrial} days left`
+      : 'Pro Traveller active'
+    : 'Free plan';
+  const accountStatus = userId ? 'Signed in' : 'Preview mode';
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        style={{ width: '100%' }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 40, width: '100%' }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Premium command header */}
         <View
           style={{
             backgroundColor: t.panelBg,
-            borderRadius: 20,
+            borderRadius: 8,
             borderWidth: 1,
             borderColor: t.border,
-            padding: 20,
-            marginBottom: 16,
+            padding: 18,
+            marginBottom: 14,
+            width: '100%',
           }}
         >
-          <Text style={{ color: t.textMuted, fontSize: 12, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' }}>
-            {PHASE_BADGES[phase]}
-          </Text>
-          <Text style={{ color: t.text, fontSize: 26, fontWeight: '800', marginTop: 4 }}>
-            {PHASE_LABELS[phase]}
-          </Text>
-          <Text style={{ color: t.textMuted, fontSize: 14, marginTop: 4 }}>
-            Split-It Travel Hub
-          </Text>
+          <View style={{ gap: 14 }}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: t.textMuted,
+                  fontSize: 11,
+                  fontWeight: '900',
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Split-It Travel Hub
+              </Text>
+              <Text style={{ color: t.text, fontSize: 27, fontWeight: '900', marginTop: 4 }}>
+                {PHASE_LABELS[phase]}, trip lead.
+              </Text>
+              <Text style={{ color: t.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6 }}>
+                {PHASE_BADGES[phase]} · {accountStatus}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push(SUBSCRIPTION_ROUTE)}
+              accessibilityRole="button"
+              accessibilityLabel="Open Pro Traveller subscription"
+              style={{
+                alignSelf: 'flex-start',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: subscription.isPro ? t.accent : t.panelBgAlt,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: subscription.isPro ? t.primary : t.border,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+              }}
+            >
+              <Ionicons name="diamond" size={15} color={subscription.isPro ? t.primary : t.textMuted} />
+              <Text style={{ color: subscription.isPro ? t.primary : t.text, fontSize: 12, fontWeight: '900' }}>
+                {subscription.isPro ? 'PRO' : 'UPGRADE'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+            <DashboardMetric label="Readiness" value={activeTrip ? `${readinessScore}%` : '--'} tone={t.primary} />
+            <DashboardMetric label="Members" value={`${members.length}`} tone={t.secondary} />
+            <DashboardMetric label="Plan" value={subscription.isPro ? 'Pro' : 'Free'} tone={t.tertiary} />
+          </View>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => router.push(SUBSCRIPTION_ROUTE)}
+          accessibilityRole="button"
+          accessibilityLabel="Open Pro Traveller subscription"
+          style={{
+            backgroundColor: subscription.isPro ? t.panelBgAlt : t.panelBg,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: subscription.isPro ? t.primary : t.border,
+            padding: 14,
+            marginBottom: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            width: '100%',
+          }}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              backgroundColor: t.accent,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 12,
+            }}
+          >
+            <Ionicons name="sparkles" size={18} color={t.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: t.text, fontSize: 15, fontWeight: '900' }}>
+              {proStatus}
+            </Text>
+            <Text style={{ color: t.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 }}>
+              {subscription.isPro
+                ? 'Live convoy, exports, offline vault, and smart settlement tools are unlocked.'
+                : `${PRO_PLAN.name} unlocks convoy command, exports, offline vault, and report workflows.`}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={t.textMuted} />
+        </TouchableOpacity>
+
+        <View style={{ gap: 10, marginBottom: 16 }}>
+          {PRO_FEATURES.slice(0, 3).map((feature) => (
+            <View
+              key={feature.key}
+              style={{
+                backgroundColor: t.panelBg,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: t.border,
+                padding: 12,
+                minHeight: 66,
+                flexDirection: 'row',
+                alignItems: 'center',
+                width: '100%',
+              }}
+            >
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  backgroundColor: t.panelBgAlt,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons name={feature.icon} size={17} color={t.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.text, fontSize: 13, fontWeight: '900' }} numberOfLines={1}>
+                  {feature.title}
+                </Text>
+                <Text style={{ color: t.textMuted, fontSize: 11, lineHeight: 15, marginTop: 3 }} numberOfLines={1}>
+                  {subscription.unlockedFeatures.includes(feature.key) ? 'Unlocked' : 'Pro only'}
+                </Text>
+              </View>
+            </View>
+          ))}
         </View>
 
         {/* Theme Override Pills */}
@@ -217,9 +414,10 @@ export default function DashboardScreen() {
               borderColor: t.border,
               padding: 20,
               marginBottom: 16,
+              width: '100%',
             }}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ gap: 8 }}>
               <Text style={{ color: t.textMuted, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 }}>
                 Selected Active Trip
               </Text>
@@ -240,11 +438,11 @@ export default function DashboardScreen() {
               {activeTrip.title}
             </Text>
             <Text style={{ color: t.textMuted, fontSize: 14, marginTop: 4 }}>
-              📍 {activeTrip.destination}
+              {activeTrip.destination}
             </Text>
             {activeTrip.start_date || activeTrip.end_date ? (
               <Text style={{ color: t.textMuted, fontSize: 13, marginTop: 4 }}>
-                🗓️ {activeTrip.start_date || 'TBD'} → {activeTrip.end_date || 'TBD'}
+                {activeTrip.start_date || 'TBD'} to {activeTrip.end_date || 'TBD'}
               </Text>
             ) : null}
 
@@ -280,7 +478,7 @@ export default function DashboardScreen() {
                 }}
               >
                 <Text style={{ color: t.btnPrimaryText, fontWeight: '700', fontSize: 14 }}>
-                  📤 Share on WhatsApp
+                  Share
                 </Text>
               </TouchableOpacity>
 
@@ -298,7 +496,7 @@ export default function DashboardScreen() {
                   }}
                 >
                   <Text style={{ color: '#F87171', fontWeight: '700', fontSize: 14 }}>
-                    ✕ End
+                    End
                   </Text>
                 </TouchableOpacity>
               )}
@@ -307,7 +505,7 @@ export default function DashboardScreen() {
             {/* Group Members Section */}
             <View style={{ marginTop: 20, paddingTop: 16, borderTopWidth: 1, borderTopColor: t.border }}>
               <Text style={{ color: t.text, fontSize: 16, fontWeight: '700', marginBottom: 10 }}>
-                👥 Group Members
+                Group Members
               </Text>
               
               {/* Member List */}
