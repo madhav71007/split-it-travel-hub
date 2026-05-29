@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '@/components/SubscriptionContext';
 import { useRouter, type Href } from 'expo-router';
+import { useAuth } from '@/components/AuthContext';
 
 interface Poll {
   id: string;
@@ -26,12 +27,13 @@ export default function PollsScreen() {
   const { activeTrip, activeTripId } = useTrip();
   const subscription = useSubscription();
   const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id || 'You';
 
   const [polls, setPolls] = useState<Poll[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
-  const [userId, setUserId] = useState('');
 
   // Check if Supabase is configured
   const isSupabaseConfigured = () => {
@@ -45,9 +47,6 @@ export default function PollsScreen() {
     );
   };
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? ''));
-  }, []);
 
   useEffect(() => {
     if (activeTripId) {

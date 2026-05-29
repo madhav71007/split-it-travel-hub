@@ -23,6 +23,8 @@ import { useTrip } from '@/components/TripContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSubscription } from '@/components/SubscriptionContext';
 import { useRouter, type Href } from 'expo-router';
+import { useAuth } from '@/components/AuthContext';
+
 
 
 interface Expense {
@@ -45,6 +47,8 @@ export default function ExpensesScreen() {
   const { activeTrip, activeTripId, members } = useTrip();
   const subscription = useSubscription();
   const router = useRouter();
+  const { user } = useAuth();
+
 
   const handleExportReport = () => {
     if (!subscription.isPro) {
@@ -97,9 +101,13 @@ export default function ExpensesScreen() {
 
   useEffect(() => {
     if (members && members.length > 0 && !paidById) {
-      setPaidById(members[0].id);
+      const matchingMember = members.find(
+        (m) => user && m.name.toLowerCase() === user.name.toLowerCase()
+      );
+      setPaidById(matchingMember ? matchingMember.id : members[0].id);
     }
-  }, [members]);
+  }, [members, user, paidById]);
+
 
   const fetchData = async () => {
     if (!activeTripId) return;

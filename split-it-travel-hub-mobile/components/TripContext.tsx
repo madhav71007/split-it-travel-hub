@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabaseClient';
 import { Alert } from 'react-native';
+import { useAuth } from './AuthContext';
+
 
 export interface Trip {
   id: string;
@@ -60,6 +62,8 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
   const [members, setMembers] = useState<TripMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
 
   // Load default/mock members if none are found in storage
   const getDefaultMembers = (tripId: string): TripMember[] => {
@@ -124,7 +128,7 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
           allTrips = data;
         }
       } else {
-        const stored = await AsyncStorage.getItem('local_trips');
+        const stored = await AsyncStorage.getItem(`local_trips_${user?.id || 'guest'}`);
         if (stored) {
           allTrips = JSON.parse(stored);
         } else {
@@ -137,12 +141,13 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
             end_date: '2026-05-30',
             invite_code: 'LONA2026',
             is_active: true,
-            owner_id: 'u1',
+            owner_id: user?.id || 'guest',
           };
           allTrips = [mockTrip];
-          await AsyncStorage.setItem('local_trips', JSON.stringify(allTrips));
+          await AsyncStorage.setItem(`local_trips_${user?.id || 'guest'}`, JSON.stringify(allTrips));
         }
       }
+
 
       setTrips(allTrips);
 
@@ -169,7 +174,8 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
+
 
   const selectTrip = async (tripId: string) => {
     const trip = trips.find((t) => t.id === tripId);
@@ -232,12 +238,13 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
           end_date,
           invite_code,
           is_active: true,
-          owner_id: 'u1',
+          owner_id: user?.id || 'guest',
         };
         const updated = [newTrip, ...trips];
         setTrips(updated);
-        await AsyncStorage.setItem('local_trips', JSON.stringify(updated));
+        await AsyncStorage.setItem(`local_trips_${user?.id || 'guest'}`, JSON.stringify(updated));
       }
+
 
       // Save initial member list to AsyncStorage
       const formattedMembers: TripMember[] = initialMembers.map((name, index) => ({
@@ -314,9 +321,10 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
         if (!trips.some((t) => t.id === matchedTrip.id)) {
           const updated = [matchedTrip, ...trips];
           setTrips(updated);
-          await AsyncStorage.setItem('local_trips', JSON.stringify(updated));
+          await AsyncStorage.setItem(`local_trips_${user?.id || 'guest'}`, JSON.stringify(updated));
         }
       }
+
 
       await selectTrip(matchedTrip.id);
       await refreshTrips();

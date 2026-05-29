@@ -18,8 +18,10 @@ import { THEME } from '@/constants/theme';
 import { supabase } from '@/lib/supabaseClient';
 import { useTrip, type Trip } from '@/components/TripContext';
 import { useSubscription } from '@/components/SubscriptionContext';
+import { useAuth } from '@/components/AuthContext';
 import { PRO_FEATURES, PRO_PLAN, PRO_LIMITS } from '@/constants/subscription';
 import { Ionicons } from '@expo/vector-icons';
+
 
 const SUBSCRIPTION_ROUTE = '/modal/subscription' as Href;
 
@@ -78,18 +80,19 @@ export default function DashboardScreen() {
     removeMember,
   } = useTrip();
   const subscription = useSubscription();
+  const { user, signOut, isOfflineMode } = useAuth();
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [inviteInput, setInviteInput] = useState('');
   const [joinNameInput, setJoinNameInput] = useState('');
   const [newMemberInput, setNewMemberInput] = useState('');
   const [joining, setJoining] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-    });
-  }, []);
+    if (user && !joinNameInput) {
+      setJoinNameInput(user.name);
+    }
+  }, [user]);
+
 
   const handleShare = async () => {
     if (!activeTrip) return;
@@ -210,7 +213,8 @@ export default function DashboardScreen() {
       ? `Pro trial: ${subscription.daysLeftInTrial} days left`
       : 'Pro Traveller active'
     : 'Free plan';
-  const accountStatus = userId ? 'Signed in' : 'Preview mode';
+  const accountStatus = user ? (isOfflineMode ? 'Local Account' : 'Cloud Account') : 'Not Signed In';
+
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -245,34 +249,66 @@ export default function DashboardScreen() {
                 Split-It Travel Hub
               </Text>
               <Text style={{ color: t.text, fontSize: 27, fontWeight: '900', marginTop: 4 }}>
-                {PHASE_LABELS[phase]}, trip lead.
+                {PHASE_LABELS[phase]}, {user?.name || 'trip lead'}.
               </Text>
               <Text style={{ color: t.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6 }}>
                 {PHASE_BADGES[phase]} · {accountStatus}
               </Text>
             </View>
-            <TouchableOpacity
-              onPress={() => router.push(SUBSCRIPTION_ROUTE)}
-              accessibilityRole="button"
-              accessibilityLabel="Open Pro Traveller subscription"
-              style={{
-                alignSelf: 'flex-start',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                backgroundColor: subscription.isPro ? t.accent : t.panelBgAlt,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: subscription.isPro ? t.primary : t.border,
-                paddingHorizontal: 10,
-                paddingVertical: 8,
-              }}
-            >
-              <Ionicons name="diamond" size={15} color={subscription.isPro ? t.primary : t.textMuted} />
-              <Text style={{ color: subscription.isPro ? t.primary : t.text, fontSize: 12, fontWeight: '900' }}>
-                {subscription.isPro ? 'PRO' : 'UPGRADE'}
-              </Text>
-            </TouchableOpacity>
+            
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={() => router.push(SUBSCRIPTION_ROUTE)}
+                accessibilityRole="button"
+                accessibilityLabel="Open Pro Traveller subscription"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: subscription.isPro ? t.accent : t.panelBgAlt,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: subscription.isPro ? t.primary : t.border,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                }}
+              >
+                <Ionicons name="diamond" size={15} color={subscription.isPro ? t.primary : t.textMuted} />
+                <Text style={{ color: subscription.isPro ? t.primary : t.text, fontSize: 12, fontWeight: '900' }}>
+                  {subscription.isPro ? 'PRO' : 'UPGRADE'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert(
+                    'Sign Out',
+                    'Are you sure you want to sign out?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Sign Out', style: 'destructive', onPress: signOut }
+                    ]
+                  );
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: t.panelBgAlt,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: t.border,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                }}
+              >
+                <Ionicons name="log-out-outline" size={15} color={t.textMuted} />
+                <Text style={{ color: t.text, fontSize: 12, fontWeight: '900' }}>
+                  SIGN OUT
+                </Text>
+              </TouchableOpacity>
+            </View>
+
           </View>
 
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
