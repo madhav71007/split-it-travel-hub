@@ -199,7 +199,6 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
       let newTrip: Trip;
 
       if (isSupabaseConfigured()) {
-        const { data: userData } = await supabase.auth.getUser();
         const { data, error } = await supabase
           .from('trips')
           .insert([
@@ -209,7 +208,7 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
               start_date: start_date || null,
               end_date: end_date || null,
               invite_code,
-              owner_id: userData?.user?.id || 'u1',
+              owner_id: user?.id || 'guest',
               is_active: true,
             },
           ])

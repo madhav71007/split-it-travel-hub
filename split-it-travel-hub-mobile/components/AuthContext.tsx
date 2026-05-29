@@ -101,8 +101,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       if (!isOfflineMode) {
         // Cloud sign in
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        if (data.session && data.user) {
+          setUser({
+            id: data.user.id,
+            email: data.user.email || '',
+            name: data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || 'User',
+            avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.user.id}`,
+          });
+        }
       } else {
         // Local simulator sign in
         const usersStr = await AsyncStorage.getItem('local_registered_users');
@@ -148,8 +156,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           },
         });
         if (error) throw error;
-        if (data.user) {
-          Alert.alert('Account Created', 'Registration successful! You can now log in.');
+        if (data.session && data.user) {
+          setUser({
+            id: data.user.id,
+            email: data.user.email || '',
+            name: data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || 'User',
+            avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.user.id}`,
+          });
+          Alert.alert('Account Created', 'Successfully registered and logged in!');
+        } else if (data.user) {
+          Alert.alert(
+            'Verification Required',
+            'Account created! Please check your email for a verification link to complete your registration, then log in.'
+          );
         }
       } else {
         // Local simulator sign up
