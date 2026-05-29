@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import '../global.css';
-import { Stack, Redirect, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SkyThemeProvider, useSkyTheme } from '@/components/SkyThemeProvider';
 import { TripProvider } from '@/components/TripContext';
@@ -8,6 +8,7 @@ import { SubscriptionProvider } from '@/components/SubscriptionContext';
 import { AuthProvider, useAuth } from '@/components/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
 import { THEME } from '@/constants/theme';
+import { useEffect } from 'react';
 
 function RootLayoutNav() {
   const { phase } = useSkyTheme();
@@ -15,6 +16,19 @@ function RootLayoutNav() {
   const t = THEME[phase];
   const { user, loading } = useAuth();
   const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+
+    const inAuthGroup = segments[0] === 'login';
+
+    if (!user && !inAuthGroup) {
+      router.replace('/login');
+    } else if (user && inAuthGroup) {
+      router.replace('/');
+    }
+  }, [user, loading, segments]);
 
   if (loading) {
     return (
@@ -26,12 +40,13 @@ function RootLayoutNav() {
 
   const inAuthGroup = segments[0] === 'login';
 
+  // Prevent flashing protected screens before redirect completes
   if (!user && !inAuthGroup) {
-    return <Redirect href="/login" />;
-  }
-
-  if (user && inAuthGroup) {
-    return <Redirect href="/" />;
+    return (
+      <View style={{ flex: 1, backgroundColor: t.canvasBg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={t.primary} />
+      </View>
+    );
   }
 
   return (
