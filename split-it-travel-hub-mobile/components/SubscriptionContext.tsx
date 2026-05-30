@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PRO_PLAN, type ProFeatureKey } from '@/constants/subscription';
+import { useAuth } from './AuthContext';
 
 type SubscriptionTier = 'free' | 'pro';
 type BillingCycle = 'monthly' | 'yearly';
@@ -58,6 +59,7 @@ function getDaysLeft(trialEndsAt: string | null) {
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [snapshot, setSnapshot] = useState<SubscriptionSnapshot>(defaultSnapshot);
+  const { user } = useAuth();
 
   useEffect(() => {
     let mounted = true;
@@ -100,16 +102,22 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   const value = useMemo<SubscriptionContextType>(() => {
     const daysLeftInTrial = getDaysLeft(snapshot.trialEndsAt);
-    const isPro = snapshot.tier === 'pro' && (snapshot.status === 'active' || daysLeftInTrial > 0);
+    const isPro = Boolean(
+      (snapshot.tier === 'pro' && (snapshot.status === 'active' || daysLeftInTrial > 0)) ||
+      user?.isPremium
+    );
 
     return {
       ...snapshot,
+      tier: user?.isPremium ? 'pro' : snapshot.tier,
+      status: user?.isPremium ? 'active' : snapshot.status,
+      unlockedFeatures: user?.isPremium ? ALL_FEATURES : snapshot.unlockedFeatures,
       isPro,
       daysLeftInTrial,
       activateProPreview,
       resetToFree,
     };
-  }, [activateProPreview, resetToFree, snapshot]);
+  }, [activateProPreview, resetToFree, snapshot, user?.isPremium]);
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;
 }

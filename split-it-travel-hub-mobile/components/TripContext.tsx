@@ -23,15 +23,26 @@ export interface TripMember {
   avatarUrl: string;
 }
 
+export interface JoinRequest {
+  id: string;
+  trip_id: string;
+  requester_username: string;
+  status: 'pending' | 'approved' | 'rejected';
+}
+
 interface TripContextType {
   trips: Trip[];
   activeTripId: string | null;
   activeTrip: Trip | null;
   members: TripMember[];
   loading: boolean;
+  pendingRequests: JoinRequest[];
   selectTrip: (tripId: string) => Promise<void>;
   createTrip: (title: string, destination: string, start_date: string, end_date: string, initialMembers: string[]) => Promise<Trip | null>;
   joinTrip: (inviteCode: string, memberName: string) => Promise<Trip | null>;
+  sendJoinRequest: (tripId: string, username: string) => Promise<void>;
+  approveJoinRequest: (requestId: string) => Promise<void>;
+  rejectJoinRequest: (requestId: string) => Promise<void>;
   addMember: (name: string) => Promise<void>;
   removeMember: (id: string) => Promise<void>;
   refreshTrips: () => Promise<void>;
@@ -61,6 +72,7 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
   const [activeTripId, setActiveTripId] = useState<string | null>(null);
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
   const [members, setMembers] = useState<TripMember[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
@@ -113,19 +125,60 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const loadJoinRequests = async (tripId: string) => {
+    if (!tripId) return;
+    try {
+      if (isSupabaseConfigured()) {
+        try {
+          const { data, error } = await supabase
+            .from('join_requests')
+            .select('*')
+            .eq('trip_id', tripId)
+            .eq('status', 'pending');
+          
+          if (!error && data) {
+            setPendingRequests(data);
+            return;
+          }
+        } catch (dbErr) {
+          // Fall back to local
+        }
+      }
+
+      const stored = await AsyncStorage.getItem(`join_requests_${tripId}`);
+      if (stored) {
+        setPendingRequests(JSON.parse(stored).filter((r: JoinRequest) => r.status === 'pending'));
+      } else {
+        setPendingRequests([]);
+      }
+    } catch (e) {
+      console.warn('Error loading join requests:', e);
+    }
+  };
+
   const refreshTrips = useCallback(async () => {
     setLoading(true);
     try {
       let allTrips: Trip[] = [];
 
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
-          .from('trips')
-          .select('*')
-          .order('created_at', { ascending: false });
+        try {
+          const { data, error } = await supabase
+            .from('trips')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-        if (!error && data) {
-          allTrips = data;
+          if (!error && data) {
+            allTrips = data;
+          } else {
+            throw error || new Error('No data returned');
+          }
+        } catch (dbErr) {
+          console.warn('Database fetch failed, loading local trips instead:', dbErr);
+          const stored = await AsyncStorage.getItem(`local_trips_${user?.id || 'guest'}`);
+          if (stored) {
+            allTrips = JSON.parse(stored);
+          }
         }
       } else {
         const stored = await AsyncStorage.getItem(`local_trips_${user?.id || 'guest'}`);
@@ -148,7 +201,6 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-
       setTrips(allTrips);
 
       // Load active trip selection
@@ -164,10 +216,12 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
         setActiveTripId(currentActive.id);
         setActiveTrip(currentActive);
         await loadMembers(currentActive.id);
+        await loadJoinRequests(currentActive.id);
       } else {
         setActiveTripId(null);
         setActiveTrip(null);
         setMembers([]);
+        setPendingRequests([]);
       }
     } catch (e) {
       console.warn('Error refreshing trips:', e);
@@ -178,13 +232,17 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
 
 
   const selectTrip = async (tripId: string) => {
+    // Write active trip ID to storage immediately to ensure updates persist
+    await AsyncStorage.setItem('active_trip_id', tripId);
+    setActiveTripId(tripId);
+    
+    // Find in current state or load members
     const trip = trips.find((t) => t.id === tripId);
     if (trip) {
-      setActiveTripId(trip.id);
       setActiveTrip(trip);
-      await AsyncStorage.setItem('active_trip_id', trip.id);
-      await loadMembers(trip.id);
     }
+    await loadMembers(tripId);
+    await loadJoinRequests(tripId);
   };
 
   const createTrip = async (
@@ -196,39 +254,47 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
   ): Promise<Trip | null> => {
     try {
       const invite_code = Math.random().toString(36).substring(2, 10).toUpperCase();
-      let newTrip: Trip;
+      let newTrip: Trip = {} as Trip;
+      let savedToDb = false;
 
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
-          .from('trips')
-          .insert([
-            {
-              title,
-              destination,
-              start_date: start_date || null,
-              end_date: end_date || null,
-              invite_code,
-              owner_id: user?.id || 'guest',
-              is_active: true,
-            },
-          ])
-          .select()
-          .single();
-
-        if (error) throw error;
-        newTrip = data;
-
-        // Try to save members in db if table exists
         try {
-          const dbMembersToInsert = initialMembers.map((name) => ({
-            trip_id: newTrip.id,
-            name,
-          }));
-          await supabase.from('trip_members').insert(dbMembersToInsert);
+          const { data, error } = await supabase
+            .from('trips')
+            .insert([
+              {
+                title,
+                destination,
+                start_date: start_date || null,
+                end_date: end_date || null,
+                invite_code,
+                owner_id: user?.id || 'guest',
+                is_active: true,
+              },
+            ])
+            .select()
+            .single();
+
+          if (error) throw error;
+          newTrip = data;
+          savedToDb = true;
+
+          // Try to save members in db if table exists
+          try {
+            const dbMembersToInsert = initialMembers.map((name) => ({
+              trip_id: newTrip.id,
+              name,
+            }));
+            await supabase.from('trip_members').insert(dbMembersToInsert);
+          } catch (dbErr) {
+            // Member table fail is okay
+          }
         } catch (dbErr) {
-          // If table doesn't exist, we will write to AsyncStorage below
+          console.warn('Supabase trip insert failed, saving locally:', dbErr);
         }
-      } else {
+      }
+
+      if (!savedToDb) {
         newTrip = {
           id: `t_${Date.now()}`,
           title,
@@ -244,7 +310,6 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
         await AsyncStorage.setItem(`local_trips_${user?.id || 'guest'}`, JSON.stringify(updated));
       }
 
-
       // Save initial member list to AsyncStorage
       const formattedMembers: TripMember[] = initialMembers.map((name, index) => ({
         id: `m_${newTrip.id}_${Date.now()}_${index}`,
@@ -253,8 +318,14 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
       }));
       await AsyncStorage.setItem(`trip_members_${newTrip.id}`, JSON.stringify(formattedMembers));
 
-      await selectTrip(newTrip.id);
+      // Direct active selection to prevent batch state delays
+      await AsyncStorage.setItem('active_trip_id', newTrip.id);
+      setActiveTripId(newTrip.id);
+      setActiveTrip(newTrip);
+      await loadMembers(newTrip.id);
+      await loadJoinRequests(newTrip.id);
       await refreshTrips();
+
       return newTrip;
     } catch (e: any) {
       Alert.alert('Error creating trip', e.message);
@@ -265,32 +336,37 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
   const joinTrip = async (inviteCode: string, memberName: string): Promise<Trip | null> => {
     try {
       let matchedTrip: Trip | undefined;
+      let dbLookupFailed = false;
 
       if (isSupabaseConfigured()) {
-        const { data, error } = await supabase
-          .from('trips')
-          .select('*')
-          .eq('invite_code', inviteCode.trim().toUpperCase())
-          .single();
-
-        if (error || !data) {
-          throw new Error('Trip not found. Please verify the invite code.');
-        }
-        matchedTrip = data;
-
-        // Try to insert participant in database
         try {
-          await supabase.from('trip_members').insert([
-            {
-              trip_id: data.id,
-              name: memberName,
-            },
-          ]);
+          const { data, error } = await supabase
+            .from('trips')
+            .select('*')
+            .eq('invite_code', inviteCode.trim().toUpperCase())
+            .single();
+
+          if (error || !data) throw error || new Error('Trip not found');
+          matchedTrip = data;
+
+          // Try to insert participant in database
+          try {
+            await supabase.from('trip_members').insert([
+              {
+                trip_id: data.id,
+                name: memberName,
+              },
+            ]);
+          } catch (dbErr) {
+            // Table doesn't exist
+          }
         } catch (dbErr) {
-          // Table doesn't exist, we will use AsyncStorage fallback
+          dbLookupFailed = true;
+          console.warn('Supabase join query failed, fallback to local lookup:', dbErr);
         }
-      } else {
-        // Fallback local search
+      }
+
+      if (!isSupabaseConfigured() || dbLookupFailed) {
         matchedTrip = trips.find(
           (t) => t.invite_code.toUpperCase() === inviteCode.trim().toUpperCase()
         );
@@ -315,8 +391,8 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
         await AsyncStorage.setItem(`trip_members_${matchedTrip.id}`, JSON.stringify(currentMembersList));
       }
 
-      // Save to local trips list if not already there (for local access)
-      if (!isSupabaseConfigured()) {
+      // Save to local trips list if not already there
+      if (!isSupabaseConfigured() || dbLookupFailed) {
         if (!trips.some((t) => t.id === matchedTrip.id)) {
           const updated = [matchedTrip, ...trips];
           setTrips(updated);
@@ -324,13 +400,104 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
 
-
-      await selectTrip(matchedTrip.id);
+      // Direct active selection to prevent batch state delays
+      await AsyncStorage.setItem('active_trip_id', matchedTrip.id);
+      setActiveTripId(matchedTrip.id);
+      setActiveTrip(matchedTrip);
+      await loadMembers(matchedTrip.id);
+      await loadJoinRequests(matchedTrip.id);
       await refreshTrips();
+
       return matchedTrip;
     } catch (e: any) {
       Alert.alert('Join Failed', e.message);
       return null;
+    }
+  };
+
+  const sendJoinRequest = async (tripId: string, username: string) => {
+    try {
+      const newRequest: JoinRequest = {
+        id: `req_${Date.now()}`,
+        trip_id: tripId,
+        requester_username: username,
+        status: 'pending',
+      };
+
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.from('join_requests').insert([newRequest]);
+        } catch (dbErr) {
+          // DB error
+        }
+      }
+      
+      const stored = await AsyncStorage.getItem(`join_requests_${tripId}`);
+      const requests = stored ? JSON.parse(stored) : [];
+      requests.push(newRequest);
+      await AsyncStorage.setItem(`join_requests_${tripId}`, JSON.stringify(requests));
+      
+      Alert.alert('Request Sent', 'Your join request has been sent to the group host.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const approveJoinRequest = async (requestId: string) => {
+    if (!activeTripId) return;
+    try {
+      const request = pendingRequests.find((r) => r.id === requestId);
+      if (!request) return;
+
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.from('join_requests').update({ status: 'approved' }).eq('id', requestId);
+        } catch (dbErr) {
+          // DB Error
+        }
+      }
+
+      const stored = await AsyncStorage.getItem(`join_requests_${activeTripId}`);
+      if (stored) {
+        const requests = JSON.parse(stored);
+        const reqIdx = requests.findIndex((r: JoinRequest) => r.id === requestId);
+        if (reqIdx >= 0) {
+          requests[reqIdx].status = 'approved';
+          await AsyncStorage.setItem(`join_requests_${activeTripId}`, JSON.stringify(requests));
+        }
+      }
+
+      setPendingRequests((prev) => prev.filter((r) => r.id !== requestId));
+      await addMember(request.requester_username);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const rejectJoinRequest = async (requestId: string) => {
+    if (!activeTripId) return;
+    try {
+      if (isSupabaseConfigured()) {
+        try {
+          await supabase.from('join_requests').update({ status: 'rejected' }).eq('id', requestId);
+        } catch (dbErr) {
+          // DB Error
+        }
+      }
+
+      const stored = await AsyncStorage.getItem(`join_requests_${activeTripId}`);
+      if (stored) {
+        const requests = JSON.parse(stored);
+        const reqIdx = requests.findIndex((r: JoinRequest) => r.id === requestId);
+        if (reqIdx >= 0) {
+          requests[reqIdx].status = 'rejected';
+          await AsyncStorage.setItem(`join_requests_${activeTripId}`, JSON.stringify(requests));
+        }
+      }
+
+      setPendingRequests((prev) => prev.filter((r) => r.id !== requestId));
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
     }
   };
 
@@ -394,10 +561,14 @@ export const TripProvider = ({ children }: { children: React.ReactNode }) => {
         activeTripId,
         activeTrip,
         members,
+        pendingRequests,
         loading,
         selectTrip,
         createTrip,
         joinTrip,
+        sendJoinRequest,
+        approveJoinRequest,
+        rejectJoinRequest,
         addMember,
         removeMember,
         refreshTrips,

@@ -12,6 +12,7 @@ import {
   Platform,
   Image,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -296,6 +297,23 @@ export default function ExpensesScreen() {
       `Record payment of ₹${settleAmount.toLocaleString('en-IN')} from ${fromName} to ${toName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Pay via GPay',
+          onPress: () => {
+            // Open GPay/UPI app with pre-filled details
+            // Replace `toId@upi` with actual UPI ID stored in user profile in a production setting.
+            const upiUrl = `upi://pay?pa=user@okicici&pn=${encodeURIComponent(toName)}&am=${settleAmount}&cu=INR`;
+            Linking.canOpenURL(upiUrl)
+              .then((supported) => {
+                if (supported) {
+                  Linking.openURL(upiUrl);
+                } else {
+                  Alert.alert('App Not Found', 'No UPI/GPay app found on this device.');
+                }
+              })
+              .catch((err) => console.error('An error occurred', err));
+          },
+        },
         {
           text: 'Mark as Settled',
           style: 'default',

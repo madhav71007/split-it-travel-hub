@@ -24,20 +24,21 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
       return alert('Please enter both email and password.');
     }
-    if (isRegister && !displayName.trim()) {
-      return alert('Please enter your display name.');
+    if (isRegister && (!displayName.trim() || !username.trim())) {
+      return alert('Please enter your display name and username.');
     }
 
     setLoading(true);
     try {
       if (isRegister) {
-        await signUp(email, password, displayName);
+        await signUp(email, password, username, displayName);
       } else {
         await signIn(email, password);
       }
@@ -217,6 +218,37 @@ export default function LoginScreen() {
             {/* Registration fields */}
             {isRegister && (
               <View style={{ marginBottom: 16 }}>
+                <Text style={{ color: t.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
+                  USERNAME
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: t.canvasBg,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: t.border,
+                    paddingHorizontal: 12,
+                    marginBottom: 16,
+                  }}
+                >
+                  <Ionicons name="at-outline" size={18} color={t.textMuted} style={{ marginRight: 8 }} />
+                  <TextInput
+                    value={username}
+                    onChangeText={setUsername}
+                    placeholder="alphanumericonly"
+                    placeholderTextColor={t.textMuted}
+                    autoCapitalize="none"
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      color: t.text,
+                      fontSize: 15,
+                    }}
+                  />
+                </View>
+
                 <Text style={{ color: t.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
                   DISPLAY NAME
                 </Text>

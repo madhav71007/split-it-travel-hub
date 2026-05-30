@@ -27,6 +27,30 @@ export default function NewTripModal() {
   const [loading, setLoading] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
 
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const date = new Date(y, m, d);
+      const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${monthsShort[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} (${daysShort[date.getDay()]})`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const handleDismiss = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
   const handleAddMemberToList = () => {
     const trimmed = newMemberName.trim();
     if (!trimmed) return;
@@ -36,14 +60,24 @@ export default function NewTripModal() {
     
     // Enforce free member limit
     if (!subscription.isPro && membersList.length >= PRO_LIMITS.freeMembers) {
-      return Alert.alert(
-        'Upgrade to Pro',
-        `The Free plan is limited to ${PRO_LIMITS.freeMembers} members per trip. Upgrade to Pro Traveller for unlimited group members.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'View Plans', onPress: () => router.push('/modal/subscription' as Href) }
-        ]
-      );
+      if (Platform.OS === 'web') {
+        const confirmUpgrade = window.confirm(
+          `Upgrade to Pro\n\nThe Free plan is limited to ${PRO_LIMITS.freeMembers} members per trip. Upgrade to Pro Traveller for unlimited group members.`
+        );
+        if (confirmUpgrade) {
+          router.push('/modal/subscription' as Href);
+        }
+      } else {
+        Alert.alert(
+          'Upgrade to Pro',
+          `The Free plan is limited to ${PRO_LIMITS.freeMembers} members per trip. Upgrade to Pro Traveller for unlimited group members.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'View Plans', onPress: () => router.push('/modal/subscription' as Href) }
+          ]
+        );
+      }
+      return;
     }
 
     setMembersList([...membersList, trimmed]);
@@ -64,14 +98,24 @@ export default function NewTripModal() {
 
     // Enforce active trip limit
     if (!subscription.isPro && trips.length >= PRO_LIMITS.freeTrips) {
-      return Alert.alert(
-        'Upgrade to Pro',
-        `The Free plan is limited to ${PRO_LIMITS.freeTrips} active trip. Upgrade to Pro Traveller for unlimited trips.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'View Plans', onPress: () => router.push('/modal/subscription' as Href) }
-        ]
-      );
+      if (Platform.OS === 'web') {
+        const confirmUpgrade = window.confirm(
+          `Upgrade to Pro\n\nThe Free plan is limited to ${PRO_LIMITS.freeTrips} active trip. Upgrade to Pro Traveller for unlimited trips.`
+        );
+        if (confirmUpgrade) {
+          router.push('/modal/subscription' as Href);
+        }
+      } else {
+        Alert.alert(
+          'Upgrade to Pro',
+          `The Free plan is limited to ${PRO_LIMITS.freeTrips} active trip. Upgrade to Pro Traveller for unlimited trips.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'View Plans', onPress: () => router.push('/modal/subscription' as Href) }
+          ]
+        );
+      }
+      return;
     }
 
     setLoading(true);
@@ -84,11 +128,18 @@ export default function NewTripModal() {
     );
     setLoading(false);
     if (trip) {
-      Alert.alert('🎉 Trip Created!', `Invite code: ${trip.invite_code}`, [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      if (Platform.OS === 'web') {
+        alert(`🎉 Trip Created!\nInvite code: ${trip.invite_code}`);
+        handleDismiss();
+      } else {
+        Alert.alert('🎉 Trip Created!', `Invite code: ${trip.invite_code}`, [
+          { text: 'OK', onPress: () => handleDismiss() },
+        ]);
+      }
     }
   };
+
+  const hasDates = !!(form.start_date && form.end_date);
 
   return (
     <View style={{ flex: 1, backgroundColor: t.gradientFrom }}>
@@ -165,30 +216,31 @@ export default function NewTripModal() {
           </Text>
           <TouchableOpacity
             onPress={() => setShowCalendar(true)}
+            activeOpacity={0.8}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: t.inputBg,
+              backgroundColor: hasDates ? t.panelBgAlt : t.inputBg,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: t.inputBorder,
+              borderColor: hasDates ? t.primary : t.inputBorder,
               padding: 14,
               gap: 12,
             }}
           >
-            <Ionicons name="calendar-outline" size={20} color={t.textMuted} />
+            <Ionicons name="calendar-outline" size={20} color={hasDates ? t.primary : t.textMuted} />
             <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between', alignItems: 'center' }}>
-              <View>
-                <Text style={{ color: t.textMuted, fontSize: 10, fontWeight: '600' }}>START</Text>
-                <Text style={{ color: form.start_date ? t.inputText : t.textMuted, fontSize: 15, fontWeight: '700', marginTop: 2 }}>
-                  {form.start_date || 'YYYY-MM-DD'}
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>START DATE</Text>
+                <Text style={{ color: form.start_date ? t.inputText : t.textMuted, fontSize: 14, fontWeight: '700', marginTop: 2 }} numberOfLines={1}>
+                  {form.start_date ? formatDisplayDate(form.start_date) : 'Select Start Date'}
                 </Text>
               </View>
-              <View style={{ width: 1, height: 24, backgroundColor: t.border, marginHorizontal: 8 }} />
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ color: t.textMuted, fontSize: 10, fontWeight: '600' }}>END</Text>
-                <Text style={{ color: form.end_date ? t.inputText : t.textMuted, fontSize: 15, fontWeight: '700', marginTop: 2 }}>
-                  {form.end_date || 'YYYY-MM-DD'}
+              <View style={{ width: 1, height: 28, backgroundColor: t.border, marginHorizontal: 12 }} />
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                <Text style={{ color: t.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textAlign: 'right' }}>END DATE</Text>
+                <Text style={{ color: form.end_date ? t.inputText : t.textMuted, fontSize: 14, fontWeight: '700', marginTop: 2, textAlign: 'right' }} numberOfLines={1}>
+                  {form.end_date ? formatDisplayDate(form.end_date) : 'Select End Date'}
                 </Text>
               </View>
             </View>
@@ -272,7 +324,7 @@ export default function NewTripModal() {
         {/* Buttons */}
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={handleDismiss}
             style={{ flex: 1, backgroundColor: t.panelBg, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: t.border }}
           >
             <Text style={{ color: t.textMuted, fontWeight: '700', fontSize: 16 }}>Cancel</Text>

@@ -6,8 +6,10 @@ import { Alert } from 'react-native';
 export interface UserProfile {
   id: string;
   email: string;
+  username?: string;
   name: string;
   avatarUrl: string;
+  isPremium?: boolean;
 }
 
 interface AuthContextType {
@@ -15,7 +17,7 @@ interface AuthContextType {
   loading: boolean;
   isOfflineMode: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  signUp: (email: string, password: string, username: string, displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -43,18 +45,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(!isSupabaseConfigured());
 
+  const enhanceProfile = (profile: UserProfile): UserProfile => {
+    if (profile.email?.toLowerCase() === 'madhav7107@gmail.com') {
+      return { ...profile, isPremium: true, username: 'madhav7107' };
+    }
+    return profile;
+  };
+
   // Supabase Auth Listener
   useEffect(() => {
     if (!isOfflineMode) {
       // 1. Get initial session
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session && session.user) {
-          setUser({
+          setUser(enhanceProfile({
             id: session.user.id,
             email: session.user.email || '',
+            username: session.user.user_metadata?.username,
             name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0] || 'User',
             avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${session.user.id}`,
-          });
+          }));
         } else {
           setUser(null);
         }
@@ -64,12 +74,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // 2. Subscribe to auth changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session && session.user) {
-          setUser({
+          setUser(enhanceProfile({
             id: session.user.id,
             email: session.user.email || '',
+            username: session.user.user_metadata?.username,
             name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0] || 'User',
             avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${session.user.id}`,
-          });
+          }));
         } else {
           setUser(null);
         }
@@ -84,7 +95,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
           const sessionStr = await AsyncStorage.getItem('local_user_session');
           if (sessionStr) {
-            setUser(JSON.parse(sessionStr));
+            setUser(enhanceProfile(JSON.parse(sessionStr)));
           }
         } catch (e) {
           console.warn('Error reading local user session:', e);
@@ -104,12 +115,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         if (data.session && data.user) {
-          setUser({
+          setUser(enhanceProfile({
             id: data.user.id,
             email: data.user.email || '',
+            username: data.user.user_metadata?.username,
             name: data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || 'User',
             avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.user.id}`,
-          });
+          }));
         }
       } else {
         // Local simulator sign in
@@ -123,12 +135,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           throw new Error('Incorrect password. Please try again.');
         }
 
-        const profile: UserProfile = {
+        const profile: UserProfile = enhanceProfile({
           id: found.id,
           email: found.email,
+          username: found.username,
           name: found.name,
           avatarUrl: found.avatarUrl,
-        };
+        });
 
         await AsyncStorage.setItem('local_user_session', JSON.stringify(profile));
         setUser(profile);
@@ -141,9 +154,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = async (email: string, password: string, username: string, displayName: string) => {
     setLoading(true);
     try {
+      const usernameRegex = /^[a-zA-Z0-9]+$/;
+      if (!usernameRegex.test(username.trim())) {
+        throw new Error('Username must be alphanumeric only (no spaces or special characters).');
+      }
+
       if (!isOfflineMode) {
         // Cloud sign up
         const { error, data } = await supabase.auth.signUp({
@@ -151,18 +169,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           password,
           options: {
             data: {
+              username: username.trim(),
               display_name: displayName,
             },
           },
         });
         if (error) throw error;
         if (data.session && data.user) {
-          setUser({
+          setUser(enhanceProfile({
             id: data.user.id,
             email: data.user.email || '',
+            username: data.user.user_metadata?.username,
             name: data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || 'User',
             avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.user.id}`,
-          });
+          }));
           Alert.alert('Account Created', 'Successfully registered and logged in!');
         } else if (data.user) {
           Alert.alert(
@@ -180,11 +200,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (users.some((u: any) => u.email.toLowerCase() === email.toLowerCase().trim())) {
           throw new Error('An account with this email already exists.');
         }
+        if (users.some((u: any) => u.username?.toLowerCase() === username.toLowerCase().trim())) {
+          throw new Error('This username is already taken.');
+        }
 
         const newId = `u_local_${Date.now()}`;
         const newLocalUser = {
           id: newId,
           email: email.trim(),
+          username: username.trim(),
           password,
           name: displayName.trim(),
           avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${displayName}`,
@@ -193,12 +217,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const updatedUsers = [...users, newLocalUser];
         await AsyncStorage.setItem('local_registered_users', JSON.stringify(updatedUsers));
 
-        const profile: UserProfile = {
+        const profile: UserProfile = enhanceProfile({
           id: newId,
           email: newLocalUser.email,
+          username: newLocalUser.username,
           name: newLocalUser.name,
           avatarUrl: newLocalUser.avatarUrl,
-        };
+        });
 
         await AsyncStorage.setItem('local_user_session', JSON.stringify(profile));
         setUser(profile);

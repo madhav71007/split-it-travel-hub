@@ -281,14 +281,20 @@ export default function DashboardScreen() {
 
               <TouchableOpacity
                 onPress={() => {
-                  Alert.alert(
-                    'Sign Out',
-                    'Are you sure you want to sign out?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Sign Out', style: 'destructive', onPress: signOut }
-                    ]
-                  );
+                  if (Platform.OS === 'web') {
+                    if (window.confirm('Are you sure you want to sign out?')) {
+                      signOut();
+                    }
+                  } else {
+                    Alert.alert(
+                      'Sign Out',
+                      'Are you sure you want to sign out?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Sign Out', style: 'destructive', onPress: signOut }
+                      ]
+                    );
+                  }
                 }}
                 style={{
                   flexDirection: 'row',
@@ -467,6 +473,25 @@ export default function DashboardScreen() {
               >
                 <Text style={{ color: t.text, fontSize: 11, fontWeight: '700' }}>
                   {activeTrip.is_active ? '● LIVE' : '✕ ENDED'}
+                </Text>
+              </View>
+              {/* Premium Host Badge Placeholder */}
+              <View
+                style={{
+                  backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                  borderColor: 'rgba(255, 193, 7, 0.5)',
+                  borderWidth: 1,
+                  borderRadius: 20,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  marginLeft: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <Ionicons name="star" size={10} color="#FFC107" style={{ marginRight: 4 }} />
+                <Text style={{ color: '#FFC107', fontSize: 10, fontWeight: '800' }}>
+                  PREMIUM
                 </Text>
               </View>
             </View>
