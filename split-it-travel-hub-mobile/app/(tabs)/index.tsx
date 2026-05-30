@@ -21,6 +21,7 @@ import { useSubscription } from '@/components/SubscriptionContext';
 import { useAuth } from '@/components/AuthContext';
 import { PRO_FEATURES, PRO_PLAN, PRO_LIMITS } from '@/constants/subscription';
 import { Ionicons } from '@expo/vector-icons';
+import CalendarPickerModal from '@/components/CalendarPickerModal';
 
 
 const SUBSCRIPTION_ROUTE = '/modal/subscription' as Href;
@@ -86,6 +87,7 @@ export default function DashboardScreen() {
   const [joinNameInput, setJoinNameInput] = useState('');
   const [newMemberInput, setNewMemberInput] = useState('');
   const [joining, setJoining] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   useEffect(() => {
     if (user && !joinNameInput) {
@@ -134,6 +136,51 @@ export default function DashboardScreen() {
         },
       ]
     );
+  };
+
+  const handleUpdateDates = async (start: string, end: string) => {
+    if (!activeTrip) return;
+    try {
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase
+          .from('trips')
+          .update({ start_date: start, end_date: end })
+          .eq('id', activeTrip.id);
+        if (error) {
+          Alert.alert('Error', 'Failed to update dates: ' + error.message);
+        } else {
+          await refreshTrips();
+        }
+      } else {
+        const localTrips = await AsyncStorage.getItem('local_trips');
+        if (localTrips) {
+          const parsed: Trip[] = JSON.parse(localTrips);
+          const updated = parsed.map((tr) =>
+            tr.id === activeTrip.id ? { ...tr, start_date: start, end_date: end } : tr
+          );
+          await AsyncStorage.setItem('local_trips', JSON.stringify(updated));
+          await refreshTrips();
+        }
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const formatDisplayDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const date = new Date(y, m, d);
+      const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${monthsShort[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} (${daysShort[date.getDay()]})`;
+    } catch (e) {
+      return dateStr;
+    }
   };
 
   const handleJoin = async () => {
@@ -501,11 +548,24 @@ export default function DashboardScreen() {
             <Text style={{ color: t.textMuted, fontSize: 14, marginTop: 4 }}>
               {activeTrip.destination}
             </Text>
-            {activeTrip.start_date || activeTrip.end_date ? (
-              <Text style={{ color: t.textMuted, fontSize: 13, marginTop: 4 }}>
-                {activeTrip.start_date || 'TBD'} to {activeTrip.end_date || 'TBD'}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, flexWrap: 'wrap', gap: 6 }}>
+              <Text style={{ color: t.textMuted, fontSize: 13, fontWeight: '600' }}>
+                📅 {formatDisplayDate(activeTrip.start_date) || 'TBD'} to {formatDisplayDate(activeTrip.end_date) || 'TBD'}
               </Text>
-            ) : null}
+              <TouchableOpacity
+                onPress={() => setShowCalendar(true)}
+                style={{
+                  backgroundColor: t.panelBgAlt,
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderWidth: 1,
+                  borderColor: t.border,
+                }}
+              >
+                <Text style={{ color: t.primary, fontSize: 11, fontWeight: '800' }}>Change Dates</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Invite code */}
             <View
@@ -793,6 +853,19 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {activeTrip && (
+        <CalendarPickerModal
+          visible={showCalendar}
+          onClose={() => setShowCalendar(false)}
+          startDate={activeTrip.start_date}
+          endDate={activeTrip.end_date}
+          onSelectRange={(start, end) => {
+            handleUpdateDates(start, end);
+            setShowCalendar(false);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 
