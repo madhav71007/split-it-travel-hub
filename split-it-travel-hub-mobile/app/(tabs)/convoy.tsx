@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useSkyTheme } from '@/components/SkyThemeProvider';
 import { THEME } from '@/constants/theme';
@@ -11,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '@/components/SubscriptionContext';
 import { useRouter, type Href } from 'expo-router';
+import ConvoyMap from '@/components/ConvoyMap';
 
 interface Vehicle {
   id: string;
@@ -280,41 +280,13 @@ export default function ConvoyScreen() {
         </Text>
 
         {/* Live Map View */}
-        {Platform.OS !== 'web' ? (
-          <View style={{ height: 250, borderRadius: 16, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: t.border }}>
-            <MapView
-              style={{ flex: 1 }}
-              initialRegion={{
-                latitude: location ? location.coords.latitude : 28.6139,
-                longitude: location ? location.coords.longitude : 77.2090,
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
-              }}
-              showsUserLocation={true}
-            >
-              {vehicles.map((v, i) => (
-                <Marker
-                  key={v.id}
-                  coordinate={{
-                    latitude: (location ? location.coords.latitude : 28.6139) + (i * 0.005),
-                    longitude: (location ? location.coords.longitude : 77.2090) + (i * 0.005),
-                  }}
-                  title={v.vehicle_name}
-                  description={`Driver: ${v.driver_name}`}
-                >
-                  <View style={{ backgroundColor: t.panelBg, padding: 6, borderRadius: 12, borderWidth: 1, borderColor: t.border, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3 }}>
-                    <Text style={{ fontSize: 20 }}>{v.emoji}</Text>
-                  </View>
-                </Marker>
-              ))}
-            </MapView>
-          </View>
-        ) : (
-          <View style={{ height: 200, backgroundColor: t.panelBgAlt, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: t.border }}>
-            <Ionicons name="map" size={40} color={t.textMuted} />
-            <Text style={{ color: t.textMuted, marginTop: 8, fontWeight: '700' }}>Live Map Tracking (Native Only)</Text>
-          </View>
-        )}
+        <View style={{ height: Platform.OS === 'web' ? 300 : 250, borderRadius: 16, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: t.border }}>
+          <ConvoyMap
+            vehicles={vehicles}
+            location={location}
+            theme={t}
+          />
+        </View>
 
         {vehicles.length === 0 ? (
           <View style={{ alignItems: 'center', paddingVertical: 60 }}>
